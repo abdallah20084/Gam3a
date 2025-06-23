@@ -15,35 +15,39 @@ interface GroupCardProps {
 
 export default function GroupCard({ group }: GroupCardProps) {
   return (
-    <div className="border rounded-lg overflow-hidden shadow hover:shadow-md transition-shadow bg-white">
-      {/* يمكنك إضافة صورة الغلاف هنا إذا كانت coverImageUrl متوفرة */}
-      {group.coverImageUrl && (
+    <div className="card h-100 shadow-sm">
+      {group.coverImageUrl ? (
         <img
           src={group.coverImageUrl}
           alt={group.name}
-          className="w-full h-32 object-cover"
+          className="card-img-top"
+          style={{ height: 130, objectFit: 'cover' }}
         />
-      )}
-      <div className="p-6">
-        <h3 className="font-bold text-lg mb-2">{group.name}</h3>
-        <p className="text-gray-600 mb-4">{group.description}</p>
-        <div className="flex flex-wrap justify-between items-center gap-2">
-          {/* استخدام group.memberCount بدلاً من group.members.length */}
-          <span className="text-sm text-gray-500">{group.memberCount} أعضاء</span>
-          
-          {/* عرض دور المستخدم الحالي، يمكنك تعديل هذا حسب رغبتك */}
-          {group.currentUserRole && group.currentUserRole !== 'none' && (
-            <span className="text-sm text-gray-500 ml-2">دوري: {group.currentUserRole}</span>
-          )}
-
-          <Link
-            // استخدام group.id بدلاً من group._id
-            href={`/group/${group.id}`} // تأكد أن المسار في Next.js هو /group/[id] وليس /groups/[id]
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
-            انضم الآن
-          </Link>
+      ) : (
+        <div
+          className="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white"
+          style={{ height: 130 }}
+        >
+          لا يوجد صورة غلاف
         </div>
+      )}
+      <div className="card-body">
+        <h5 className="card-title text-end">{group.name}</h5>
+        <p className="card-text text-end text-muted small mb-2">{group.description}</p>
+        <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <span className="text-muted small">{group.memberCount} أعضاء</span>
+          {group.currentUserRole && group.currentUserRole !== 'none' && (
+            <span className="badge bg-info text-dark ms-2">دوري: {group.currentUserRole}</span>
+          )}
+        </div>
+      </div>
+      <div className="card-footer bg-white border-0 d-flex justify-content-end">
+        <Link
+          href={`/group/${group.id}`}
+          className="btn btn-primary btn-sm"
+        >
+          انضم الآن
+        </Link>
       </div>
     </div>
   );

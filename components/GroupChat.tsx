@@ -49,9 +49,7 @@ const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId }) => {
       });
 
       // الاستماع لأخطاء الاتصال
-      newSocket.on("connect_error", (err: { message: any; }) => {
-        // يمكنك عرض رسالة خطأ هنا إذا أردت
-      });
+      newSocket.on("connect_error", () => {});
 
       // دالة التنظيف: قطع الاتصال عند إلغاء تحميل المكون
       return () => {
@@ -77,12 +75,15 @@ const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId }) => {
       socket.emit("sendMessage", messageData); // إرسال الرسالة إلى الخادم
 
       // إضافة رسالتك على الفور إلى الدردشة للعرض المحلي
-      setMessages((prev) => [...prev, {
-        groupId: groupId,
-        senderId: "You", // يمكنك استخدام "أنت" أو اسم المستخدم الفعلي
-        messageContent: messageInput.trim(),
-        timestamp: new Date().toISOString()
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          groupId: groupId,
+          senderId: "You", // يمكنك استخدام "أنت" أو اسم المستخدم الفعلي
+          messageContent: messageInput.trim(),
+          timestamp: new Date().toISOString(),
+        },
+      ]);
 
       setMessageInput(""); // مسح حقل الإدخال
     } else {
@@ -111,19 +112,20 @@ const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId }) => {
             messages.map((msg, index) => (
               <div
                 key={index}
-                className={`mb-2 p-2 rounded ${
+                className={`mb-2 p-2 rounded-3 ${
                   msg.senderId === "You"
-                    ? "bg-info text-end text-white"
-                    : "bg-light text-start"
+                    ? "bg-info text-end text-white ms-5"
+                    : "bg-light text-start me-5 border"
                 }`}
+                style={{ maxWidth: "80%", marginRight: msg.senderId === "You" ? "auto" : 0, marginLeft: msg.senderId === "You" ? 0 : "auto" }}
               >
-                <span className="fw-bold">
+                <div className="fw-bold small mb-1">
                   {msg.senderId === "You" ? "أنت" : msg.senderId}
-                </span>
-                : {msg.messageContent}
-                <span className="d-block text-end text-secondary small mt-1">
+                </div>
+                <div>{msg.messageContent}</div>
+                <div className="text-end text-secondary small mt-1">
                   {new Date(msg.timestamp).toLocaleTimeString()}
-                </span>
+                </div>
               </div>
             ))
           )}
@@ -148,7 +150,7 @@ const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId }) => {
               type="button"
               disabled={!socket || !messageInput.trim()}
             >
-              إرسال
+              <i className="bi bi-send"></i> إرسال
             </button>
           </div>
           {!socket && (

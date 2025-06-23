@@ -45,7 +45,7 @@ export default function RegisterForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-4 rounded shadow-sm mx-auto" style={{maxWidth: 400}}>
+    <form onSubmit={handleSubmit} className="bg-white p-4 rounded-3 shadow-sm mx-auto" style={{maxWidth: 400}}>
       <h2 className="mb-4 text-center fw-bold">تسجيل حساب جديد</h2>
       {error && <div className="alert alert-danger py-2 text-center mb-3">{error}</div>}
       <div className="mb-3">
@@ -89,7 +89,12 @@ export default function RegisterForm() {
         />
       </div>
       <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-        {loading ? 'جاري التسجيل...' : 'تسجيل'}
+        {loading ? (
+          <>
+            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            جاري التسجيل...
+          </>
+        ) : 'تسجيل'}
       </button>
     </form>
   );

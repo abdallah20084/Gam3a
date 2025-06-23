@@ -3,12 +3,13 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Navbar() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -25,58 +26,75 @@ export default function Navbar() {
     router.push('/auth/login');
   };
 
+  // إغلاق القائمة عند الضغط خارجها
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        const dropdownMenu = dropdownRef.current.querySelector('.dropdown-menu');
+        if (dropdownMenu?.classList.contains('show')) {
+          (dropdownRef.current.querySelector('[data-bs-toggle="dropdown"]') as HTMLElement)?.click();
+        }
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // تحميل جافاسكريبت البوتستراب لدعم القوائم المنسدلة والـ collapse
   useEffect(() => {
     import('bootstrap/dist/js/bootstrap.bundle.min.js');
   }, []);
 
   return (
+    <>
     <nav className="navbar navbar-expand-lg navbar-light bg-white shadow-sm px-3" dir="rtl">
       <div className="container-fluid">
         {/* Logo */}
-        <Link href="/" className="navbar-brand fw-bold text-primary fs-3">
+        <Link href="/" className="navbar-brand fw-bold text-primary fs-3 shadow-hover">
           Gam3a5G.com
         </Link>
 
-        <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+        {/* زر القائمة الجانبية للموبايل */}
+        <button className="navbar-toggler shadow-hover" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
           <span className="navbar-toggler-icon"></span>
         </button>
 
         <div className="collapse navbar-collapse" id="mainNavbar">
-          {/* محتويات النافبار */}
+          {/* قائمة الروابط الرئيسية */}
           <ul className="navbar-nav me-auto mb-2 mb-lg-0 gap-2 w-100">
             {isLoggedIn && (
               <li className="nav-item d-lg-none mb-3">
-                <div className="d-flex align-items-center">
+                <div className="d-flex align-items-center shadow-hover px-2 py-1 rounded-3">
                   <img className="rounded-circle" src="/images/1.jpg" alt="User Avatar" width={40} height={40} />
-                  <span className="ms-2 fw-bold">{userName || 'المستخدم'}</span>
+                  <span className="ms-2 fw-bold text-dark">{userName || 'المستخدم'}</span>
                 </div>
               </li>
             )}
             <li className="nav-item">
-              <Link href="/" className="nav-link">الرئيسية</Link>
+              <Link href="/" className="nav-link shadow-hover fw-bold fs-4 text-dark">الرئيسية</Link>
             </li>
             <li className="nav-item">
-              <Link href="/groups" className="nav-link">المجموعات</Link>
+              <Link href="/groups" className="nav-link shadow-hover fw-bold fs-4 text-dark">الجروبات</Link>
             </li>
             <li className="nav-item">
-              <Link href="/events" className="nav-link">الفعاليات</Link>
+              <span className="fw-bold fs-4 text-muted px-2" style={{ cursor: 'not-allowed' }}>شقق وعقارات قريبًا</span>
             </li>
             <li className="nav-item">
-              <Link href="/jobs" className="nav-link">الوظائف</Link>
-            </li>
-            <li className="nav-item">
-              <Link href="/notifications" className="nav-link">الإشعارات</Link>
+              <span className="fw-bold fs-4 text-muted px-2" style={{ cursor: 'not-allowed' }}>مطاعم قريبًا</span>
             </li>
             {isLoggedIn && (
               <>
                 <li className="nav-item d-lg-none">
-                  <Link href="/profile" className="nav-link">الملف الشخصي</Link>
+                  <Link href="/profile" className="nav-link shadow-hover fw-semibold fs-5 text-dark">الملف الشخصي</Link>
                 </li>
                 <li className="nav-item d-lg-none">
-                  <Link href="/settings" className="nav-link">الإعدادات</Link>
+                  <Link href="/settings" className="nav-link shadow-hover fw-semibold fs-5 text-dark">الإعدادات</Link>
                 </li>
                 <li className="nav-item d-lg-none mt-3">
-                  <button className="btn btn-danger w-100" onClick={handleLogout}>
+                  <button className="btn btn-danger w-100 fw-semibold fs-5 btn-glow" onClick={handleLogout}>
                     تسجيل الخروج
                   </button>
                 </li>
@@ -85,10 +103,10 @@ export default function Navbar() {
             {!isLoggedIn && (
               <>
                 <li className="nav-item d-lg-none mt-3">
-                  <Link href="/auth/login" className="btn btn-primary w-100 mb-2">
+                  <Link href="/auth/login" className="btn btn-primary w-100 mb-2 fw-semibold fs-5 btn-glow">
                     تسجيل الدخول
                   </Link>
-                  <Link href="/auth/register" className="btn btn-outline-secondary w-100">
+                  <Link href="/auth/register" className="btn btn-outline-secondary w-100 fw-semibold fs-5 btn-glow">
                     التسجيل
                   </Link>
                 </li>
@@ -97,43 +115,108 @@ export default function Navbar() {
           </ul>
 
           {/* عناصر اليمين في الشاشات الكبيرة */}
-          <div className="d-none d-lg-flex align-items-center gap-2">
+          <div className="d-none d-lg-flex align-items-center gap-3">
             {isLoggedIn ? (
               <>
-                <button className="btn btn-link text-secondary p-0 me-2" title="الإشعارات">
-                  <i className="bi bi-bell fs-4"></i>
-                </button>
-                <div className="dropdown">
+                {/* أيقونة الرسايل مع قائمة منسدلة */}
+                <div className="dropdown me-2">
                   <button
-                    className="btn btn-link p-0 me-2 dropdown-toggle d-flex align-items-center"
+                    className="btn btn-link p-0 dropdown-toggle shadow-hover"
+                    type="button"
+                    id="messagesDropdown"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    style={{ transition: 'box-shadow 0.2s', fontSize: '1.7rem' }}
+                  >
+                    <i className="bi bi-chat-dots text-secondary"></i>
+                  </button>
+                  <ul className="dropdown-menu dropdown-menu-end text-end" aria-labelledby="messagesDropdown" style={{ minWidth: 260 }}>
+                    <li className="dropdown-header fw-bold">الرسائل</li>
+                    <li><hr className="dropdown-divider" /></li>
+                    <li>
+                      <span className="dropdown-item text-muted">لا توجد رسائل جديدة</span>
+                    </li>
+                    {/* يمكنك إضافة رسائل هنا */}
+                  </ul>
+                </div>
+                {/* أيقونة الجرس مع قائمة منسدلة */}
+                <div className="dropdown me-2">
+                  <button
+                    className="btn btn-link p-0 dropdown-toggle shadow-hover"
+                    type="button"
+                    id="notificationsDropdown"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    style={{ transition: 'box-shadow 0.2s', fontSize: '1.7rem' }}
+                  >
+                    <i className="bi bi-bell text-secondary"></i>
+                  </button>
+                  <ul className="dropdown-menu dropdown-menu-end text-end" aria-labelledby="notificationsDropdown" style={{ minWidth: 260 }}>
+                    <li className="dropdown-header fw-bold">الإشعارات</li>
+                    <li><hr className="dropdown-divider" /></li>
+                    <li>
+                      <span className="dropdown-item text-muted">لا توجد إشعارات جديدة</span>
+                    </li>
+                    {/* يمكنك إضافة إشعارات هنا */}
+                  </ul>
+                </div>
+                {/* صورة واسم المستخدم مع قائمة منسدلة */}
+                <div
+                  className="dropdown"
+                  ref={dropdownRef}
+                >
+                  <button
+                    className="btn btn-link p-0 me-2 dropdown-toggle d-flex align-items-center shadow-hover"
                     type="button"
                     id="userDropdown"
                     data-bs-toggle="dropdown"
                     aria-expanded="false"
+                    style={{ cursor: 'pointer', transition: 'box-shadow 0.2s' }}
                   >
-                    <img className="rounded-circle" src="/images/1.jpg" alt="User Avatar" width={36} height={36} />
-                    <span className="ms-2 fw-bold">{userName || 'المستخدم'}</span>
+                    <span
+                      className="fw-bold text-dark user-select-none"
+                      style={{
+                        fontSize: '1.1rem',
+                        textTransform: 'capitalize',
+                        textDecoration: 'none',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      {userName
+                        ? userName
+                            .split(' ')
+                            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                            .join(' ')
+                        : 'المستخدم'}
+                    </span>
+                    <img
+                      className="rounded-circle ms-2"
+                      src="/images/1.jpg"
+                      alt="User Avatar"
+                      width={38}
+                      height={38}
+                    />
                   </button>
-                  <ul className="dropdown-menu dropdown-menu-end text-end" aria-labelledby="userDropdown">
+                  <ul className="dropdown-menu dropdown-menu-end text-end">
                     <li>
-                      <Link href="/profile" className="dropdown-item">الملف الشخصي</Link>
+                      <Link href="/profile" className="dropdown-item shadow-hover fw-semibold fs-6 text-dark">الملف الشخصي</Link>
                     </li>
                     <li>
-                      <Link href="/settings" className="dropdown-item">الإعدادات</Link>
+                      <Link href="/settings" className="dropdown-item shadow-hover fw-semibold fs-6 text-dark">الإعدادات</Link>
                     </li>
                     <li><hr className="dropdown-divider" /></li>
                     <li>
-                      <button className="dropdown-item text-danger" onClick={handleLogout}>تسجيل الخروج</button>
+                      <button className="dropdown-item text-danger fw-semibold fs-6 btn-glow" onClick={handleLogout}>تسجيل الخروج</button>
                     </li>
                   </ul>
                 </div>
               </>
             ) : (
               <>
-                <Link href="/auth/login" className="btn btn-primary fw-bold px-3">
+                <Link href="/auth/login" className="btn btn-primary fw-bold px-3 fs-5 btn-glow">
                   تسجيل الدخول
                 </Link>
-                <Link href="/auth/register" className="btn btn-outline-secondary fw-bold px-3">
+                <Link href="/auth/register" className="btn btn-outline-secondary fw-bold px-3 fs-5 btn-glow">
                   التسجيل
                 </Link>
               </>
@@ -142,5 +225,33 @@ export default function Navbar() {
         </div>
       </div>
     </nav>
+    <style jsx global>{`
+      .shadow-hover:hover, .shadow-hover:focus {
+        box-shadow: 0 2px 12px 0 rgba(0,0,0,0.12), 0 1.5px 4px 0 rgba(0,0,0,0.10);
+        background: #f6f8fa;
+        text-decoration: none !important;
+      }
+      .navbar .nav-link, .navbar .btn, .dropdown-item {
+        text-decoration: none !important;
+        transition: box-shadow 0.2s, background 0.2s;
+      }
+      .navbar .nav-link,
+      .navbar .dropdown-item {
+        color: #222 !important;
+      }
+      /* تأثير مختلف للأزرار المهمة */
+      .btn-glow:hover, .btn-glow:focus {
+        box-shadow: 0 0 0 0.25rem rgba(13,110,253,.15) !important;
+        background: #f0f4ff !important;
+        filter: brightness(1.05);
+      }
+      .btn-danger.btn-glow:hover, .btn-danger.btn-glow:focus,
+      .dropdown-item.text-danger.btn-glow:hover, .dropdown-item.text-danger.btn-glow:focus {
+        background: #ffebee !important;
+        color: #c00 !important;
+        box-shadow: 0 0 0 0.25rem rgba(220,53,69,.12) !important;
+      }
+    `}</style>
+    </>
   );
 }
