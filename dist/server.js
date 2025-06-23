@@ -44,8 +44,12 @@ const url_1 = require("url");
 const next_1 = __importDefault(require("next"));
 const socket_io_1 = require("socket.io");
 const mongoose_1 = __importDefault(require("mongoose"));
-const jwt = __importStar(require("jsonwebtoken")); // <--- FIX: Ensure this line is exactly here
-// import { LeanDocument } from 'mongoose'; // This line is not needed and was removed previously
+const jwt = __importStar(require("jsonwebtoken"));
+const dompurify_1 = __importDefault(require("dompurify"));
+const jsdom_1 = require("jsdom");
+// Setup DOMPurify for server-side sanitization
+const window = new jsdom_1.JSDOM('').window;
+const domPurify = (0, dompurify_1.default)(window);
 // Import your Mongoose models and db connection
 const db_1 = __importDefault(require("./lib/db"));
 const Message_1 = __importDefault(require("./models/Message"));
@@ -108,35 +112,44 @@ app.prepare().then(() => {
                 }
             };
             socket.onAny(updateActivity);
+            // متغير لتخزين اسم المستخدم الحالي
+            let currentUserName = null;
+            let currentUserId = null;
             socket.on('joinGroup', async (groupId, token) => {
                 try {
                     await (0, db_1.default)();
                     if (!mongoose_1.default.Types.ObjectId.isValid(groupId)) {
                         socket.emit('errorJoiningGroup', 'معرف مجموعة غير صالح.');
+                        socket.disconnect();
                         return;
                     }
                     let userId;
                     let isSuperAdmin = false;
                     try {
-                        console.log(`Attempting to verify token for socket ${socket.id}. Token (first 20 chars): ${token.substring(0, 20)}...`);
                         const decodedToken = jwt.verify(token, JWT_SECRET);
                         userId = new mongoose_1.default.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
                         isSuperAdmin = decodedToken.isSuperAdmin || false;
+                        currentUserId = userId.toString();
                     }
                     catch (jwtError) {
-                        console.error(`Socket ${socket.id}: JWT Verification FAILED! Error details:`, jwtError);
-                        console.warn(`Socket ${socket.id}: Invalid token for joinGroup. Token Error: ${jwtError.message}`);
                         socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية. الرجاء إعادة تسجيل الدخول.');
+                        socket.disconnect();
+                        return;
+                    }
+                    const userDoc = await User_1.default.findById(userId, { name: 1 }).lean();
+                    currentUserName = userDoc?.name || 'مستخدم';
+                    if (!userDoc) {
+                        socket.emit('errorJoiningGroup', 'المستخدم غير موجود.');
+                        socket.disconnect();
                         return;
                     }
                     const isMember = await GroupMember_1.default.exists({ group: groupId, user: userId });
                     if (!isMember && !isSuperAdmin) {
-                        console.warn(`Socket ${socket.id}: User ${userId} is not a member of group ${groupId} and not super admin. Access denied.`);
                         socket.emit('errorJoiningGroup', 'غير مصرح لك بالانضمام إلى هذه المجموعة.');
+                        socket.disconnect();
                         return;
                     }
                     socket.join(groupId);
-                    console.log(`Socket ${socket.id} (User ${userId}) joined group ${groupId}`);
                     let userData = connectedUsers.get(socket.id);
                     if (!userData) {
                         userData = {
@@ -151,35 +164,63 @@ app.prepare().then(() => {
                     userConnectionCount.set(userId.toString(), (userConnectionCount.get(userId.toString()) || 0) + 1);
                     if (userConnectionCount.get(userId.toString()) === 1) {
                         io.emit('userStatusUpdate', { userId: userId.toString(), isOnline: true });
-                        console.log(`User ${userId} is now ONLINE.`);
                     }
+                    // بث رسالة انضمام عضو جديد
+                    io.to(groupId).emit('receiveMessage', {
+                        id: new mongoose_1.default.Types.ObjectId().toString(),
+                        groupId,
+                        senderId: userId.toString(),
+                        senderName: currentUserName,
+                        senderAvatar: null,
+                        content: `🟢 ${currentUserName} انضم إلى المجموعة.`,
+                        timestamp: new Date().toISOString(),
+                        isSystemMessage: true,
+                    });
+                    // جلب الرسائل القديمة
                     const oldMessages = await Message_1.default.find({ group: groupId })
                         .sort({ timestamp: -1 })
                         .limit(50)
-                        .populate({
-                        path: 'sender',
-                        select: 'name avatar',
-                        model: User_1.default,
-                    })
+                        .populate('sender', 'name avatar')
                         .lean();
-                    const formattedOldMessages = oldMessages.map((msg) => ({
-                        id: msg._id.toString(),
-                        groupId: msg.group.toString(),
-                        senderId: msg.sender._id.toString(),
-                        senderName: msg.sender.name,
-                        senderAvatar: msg.sender.avatar || null,
-                        content: msg.content,
-                        timestamp: msg.timestamp.toISOString(),
-                        isEdited: false,
-                    }));
+                    if (!Array.isArray(oldMessages)) {
+                        socket.emit('errorJoiningGroup', 'حدث خطأ أثناء جلب الرسائل القديمة.');
+                        socket.disconnect();
+                        return;
+                    }
+                    for (const msg of oldMessages) {
+                        // إذا كان sender عبارة عن ObjectId أو لا يوجد name
+                        if (!msg.sender ||
+                            typeof msg.sender !== 'object' ||
+                            !('name' in msg.sender)) {
+                            socket.emit('errorJoiningGroup', 'حدث خطأ أثناء جلب بيانات المرسل.');
+                            socket.disconnect();
+                            return;
+                        }
+                    }
+                    const formattedOldMessages = oldMessages.map((msg) => {
+                        // تأكد أن sender هو object وفيه name وavatar
+                        const sender = (typeof msg.sender === 'object' && msg.sender && 'name' in msg.sender)
+                            ? msg.sender
+                            : { _id: '', name: 'مستخدم', avatar: null };
+                        return {
+                            id: msg._id.toString(),
+                            groupId: msg.group.toString(),
+                            senderId: sender._id.toString(),
+                            senderName: sender.name,
+                            senderAvatar: sender.avatar || null,
+                            content: msg.content,
+                            timestamp: msg.timestamp.toISOString(),
+                            isEdited: false,
+                        };
+                    });
                     socket.emit('joinedGroup', {
                         groupId,
                         messages: formattedOldMessages,
                     });
                 }
                 catch (error) {
-                    console.error(`Socket ${socket.id}: Server error joining group ${groupId}:`, error);
                     socket.emit('errorJoiningGroup', 'حدث خطأ غير متوقع أثناء الانضمام إلى المجموعة. الرجاء المحاولة لاحقاً.');
+                    socket.disconnect();
                 }
             });
             socket.on('sendMessage', async (data) => {
@@ -190,12 +231,13 @@ app.prepare().then(() => {
                         socket.emit('messageError', 'معرف مجموعة غير صالح لإرسال الرسالة.');
                         return;
                     }
-                    const trimmedContent = content.trim();
-                    if (!trimmedContent) {
+                    // تنظيف المحتوى من أي أكواد ضارة
+                    const sanitizedContent = domPurify.sanitize(content.trim());
+                    if (!sanitizedContent) {
                         socket.emit('messageError', 'محتوى الرسالة لا يمكن أن يكون فارغاً.');
                         return;
                     }
-                    if (trimmedContent.length > 1000) {
+                    if (sanitizedContent.length > 1000) {
                         socket.emit('messageError', 'الرسالة طويلة جداً (الحد الأقصى 1000 حرف).');
                         return;
                     }
@@ -220,19 +262,17 @@ app.prepare().then(() => {
                     const newMessage = new Message_1.default({
                         group: groupId,
                         sender: userId,
-                        content: trimmedContent,
+                        content: sanitizedContent,
                     });
                     await newMessage.save();
-                    const senderUser = await User_1.default.findById(userId)
-                        .select('name avatar')
-                        .lean();
+                    const senderUser = await User_1.default.findById(userId, { name: 1, avatar: 1 }).lean();
                     if (!senderUser) {
                         console.error(`Socket ${socket.id}: Sender user not found for message: ${userId}`);
                         socket.emit('messageError', 'خطأ في معلومات المرسل. الرجاء إعادة تسجيل الدخول.');
                         return;
                     }
                     const messageToSend = {
-                        id: newMessage._id.toString(),
+                        id: String(newMessage._id),
                         groupId: groupId,
                         senderId: senderUser._id.toString(),
                         senderName: senderUser.name,
@@ -283,7 +323,7 @@ app.prepare().then(() => {
                     }
                     await Message_1.default.deleteOne({ _id: messageId });
                     console.log(`Socket ${socket.id}: Message ${messageId} deleted by user ${userId} in group ${groupId}.`);
-                    const deleterUser = await User_1.default.findById(userId).select('name').lean();
+                    const deleterUser = await User_1.default.findById(userId, { name: 1 }).lean();
                     const deleterName = deleterUser?.name || 'مستخدم غير معروف';
                     const systemMessage = {
                         id: new mongoose_1.default.Types.ObjectId().toString(),
@@ -343,7 +383,7 @@ app.prepare().then(() => {
                     await messageToEdit.save();
                     console.log(`Socket ${socket.id}: Message ${messageId} edited by user ${userId} in group ${groupId}.`);
                     io.to(groupId).emit('messageEdited', {
-                        messageId: messageToEdit._id.toString(),
+                        messageId: String(messageToEdit._id),
                         newContent: messageToEdit.content,
                         isEdited: true,
                     });
@@ -364,24 +404,19 @@ app.prepare().then(() => {
                 }
             });
             socket.on('disconnect', () => {
-                console.log(`Socket.IO: Client disconnected - ID: ${socket.id}`);
                 const userData = connectedUsers.get(socket.id);
                 if (userData) {
-                    connectedUsers.delete(userData.socketId);
-                    userConnectionCount.set(userData.userId, (userConnectionCount.get(userData.userId) || 1) - 1);
+                    userConnectionCount.set(userData.userId, (userConnectionCount.get(userData.userId) || 0) - 1);
                     if (userConnectionCount.get(userData.userId) === 0) {
                         io.emit('userStatusUpdate', { userId: userData.userId, isOnline: false });
-                        console.log(`User ${userData.userId} is now OFFLINE.`);
                     }
+                    connectedUsers.delete(socket.id);
+                    console.log(`Socket.IO: Client disconnected - ID: ${socket.id}`);
                 }
             });
         });
     }
     httpServer.listen(port, hostname, () => {
-        console.log(`Next.js app running on http://${hostname}:${port} (Access via ${hostname === '0.0.0.0' ? 'your_ip_address' : hostname}:${port})`);
-        console.log('*** Server is fully listening and should be ready to accept connections. ***');
+        console.log(`Server listening on http://${hostname}:${port}`);
     });
-}).catch((err) => {
-    console.error('Failed to prepare Next.js app or start server:', err);
-    process.exit(1);
 });

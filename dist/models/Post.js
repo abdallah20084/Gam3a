@@ -52,14 +52,6 @@ const PostSchema = new mongoose_1.Schema({
         type: Boolean,
         default: false, // هل تم تصنيف المحتوى على أنه NSFW؟ (مخفي/محظور إذا كان true)
     },
-    createdAt: {
-        type: Date,
-        default: Date.now,
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now,
-    },
     group: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Group', // يشير إلى نموذج Group
@@ -70,6 +62,6 @@ const PostSchema = new mongoose_1.Schema({
         ref: 'User', // يشير إلى نموذج User
         required: true,
     },
-});
+}, { timestamps: true });
 const Post = mongoose_1.default.models.Post || mongoose_1.default.model('Post', PostSchema);
 exports.default = Post;

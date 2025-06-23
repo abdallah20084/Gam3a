@@ -38,11 +38,11 @@ const mongoose_1 = __importStar(require("mongoose"));
 const GroupSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
-    coverImageUrl: { type: String }, // Optional field for group cover image
+    coverImageUrl: { type: String },
     admin: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
-    memberCount: { type: Number, default: 0 }, // Initialize memberCount to 0
+    memberCount: { type: Number, default: 0 },
 }, {
-    timestamps: true, // Adds createdAt and updatedAt timestamps
+    timestamps: true,
 });
 const Group = mongoose_1.default.models.Group || mongoose_1.default.model('Group', GroupSchema);
 exports.default = Group;

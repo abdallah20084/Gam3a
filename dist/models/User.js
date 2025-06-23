@@ -36,14 +36,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // models/User.ts
 const mongoose_1 = __importStar(require("mongoose"));
 const UserSchema = new mongoose_1.Schema({
-    name: { type: String, required: true, trim: true, maxlength: 50 },
-    phone: { type: String, required: true, unique: true, trim: true },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true },
     avatar: { type: String },
-    isVerified: { type: Boolean, default: false },
-    isSuperAdmin: { type: Boolean, default: false }, // Default is false
-}, {
-    timestamps: true,
-});
+    // أضف أي حقول إضافية هنا حسب الحاجة
+}, { timestamps: true });
 const User = mongoose_1.default.models.User || mongoose_1.default.model('User', UserSchema);
 exports.default = User;

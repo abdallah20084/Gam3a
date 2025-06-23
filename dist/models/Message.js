@@ -38,12 +38,12 @@ const mongoose_1 = __importStar(require("mongoose"));
 // تعريف Schema للرسالة
 const MessageSchema = new mongoose_1.Schema({
     group: {
-        type: mongoose_1.default.Schema.Types.ObjectId,
+        type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Group', // يشير إلى نموذج Group
         required: true,
     },
     sender: {
-        type: mongoose_1.default.Schema.Types.ObjectId,
+        type: mongoose_1.Schema.Types.ObjectId,
         ref: 'User', // يشير إلى نموذج User
         required: true,
     },
@@ -52,21 +52,11 @@ const MessageSchema = new mongoose_1.Schema({
         required: true,
         trim: true, // إزالة المسافات البيضاء الزائدة
     },
-    type: {
-        type: String,
-        enum: ['text', 'image', 'video', 'audio', 'file'],
-        default: 'text',
-    },
-    attachments: [{
-            url: String,
-            name: String,
-            size: Number,
-            type: String,
-        }],
     timestamp: {
         type: Date,
         default: Date.now,
     },
 });
 // تصدير النموذج
-exports.default = mongoose_1.default.models.Message || mongoose_1.default.model('Message', MessageSchema);
+const Message = mongoose_1.default.models.Message || mongoose_1.default.model('Message', MessageSchema);
+exports.default = Message;

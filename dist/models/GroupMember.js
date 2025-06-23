@@ -38,10 +38,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const GroupMemberSchema = new mongoose_1.Schema({
     group: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Group', required: true },
     user: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
-    role: { type: String, enum: ['admin', 'member'], default: 'member' },
-    joinedAt: { type: Date, default: Date.now },
+    joinedAt: { type: Date, default: Date.now }
 });
-// Ensure a user can only be a member of a specific group once
-GroupMemberSchema.index({ group: 1, user: 1 }, { unique: true });
 const GroupMember = mongoose_1.default.models.GroupMember || mongoose_1.default.model('GroupMember', GroupMemberSchema);
 exports.default = GroupMember;

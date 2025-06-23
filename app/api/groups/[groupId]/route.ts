@@ -53,9 +53,10 @@ export async function GET(request: NextRequest, { params }: { params: { groupId:
         
         const memberInfo = await GroupMember.findOne({ group: groupId, user: userId });
         if (memberInfo) {
+          const role = (memberInfo as any).role;
           isMember = true;
-          currentUserRole = memberInfo.role;
-          if (memberInfo.role === 'admin') {
+          currentUserRole = role;
+          if (role === 'admin') {
             isAdmin = true;
           }
         }

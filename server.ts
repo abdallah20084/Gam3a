@@ -303,7 +303,7 @@ app.prepare().then(() => {
           }
 
           const messageToSend: FormattedMessage = {
-            id: newMessage._id.toString(),
+            id: String(newMessage._id),
             groupId: groupId,
             senderId: senderUser._id.toString(),
             senderName: senderUser.name,
@@ -432,7 +432,7 @@ app.prepare().then(() => {
           console.log(`Socket ${socket.id}: Message ${messageId} edited by user ${userId} in group ${groupId}.`);
 
           io!.to(groupId).emit('messageEdited', {
-            messageId: messageToEdit._id.toString(),
+            messageId: String(messageToEdit._id),
             newContent: messageToEdit.content,
             isEdited: true,
           });
