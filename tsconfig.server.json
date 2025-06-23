@@ -1,0 +1,39 @@
+// tsconfig.server.json
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "skipLibCheck": true, // Critical for ignoring issues in node_modules
+    "outDir": "./dist",
+    "rootDir": "./",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
+    "lib": ["esnext"], // Node.js environments usually rely on 'node' types for globals
+    "types": ["node"] // <-- ADDED: To include Node.js built-in types (e.g., 'fs')
+  },
+  "include": [
+    "server.ts",
+    "lib/db.ts", // Only include the database connection, as server.ts uses it
+    "models/**/*.ts" // Include all Mongoose models
+    // Exclude other lib/config files that are not directly used by server.ts
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "app",
+    "pages",
+    "public",
+    "config", // Exclude the entire config folder to avoid twilio.ts
+    "lib/auth.ts", // Exclude specific lib files if not directly used by server.ts
+    "lib/chat.ts",
+    "lib/ffmpeg.ts",
+    "lib/group.ts",
+    "lib/video.ts"
+  ]
+}
