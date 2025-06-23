@@ -73,7 +73,6 @@ export async function GET(request: NextRequest, { params }: { params: { groupId:
     const canEdit = isAdmin || isSuperAdminOfAnyGroup;
 
     type PopulatedGroupMemberUser = IUser & { _id: mongoose.Types.ObjectId };
-    
     type PopulatedGroupMemberDoc = Omit<mongoose.Document & { user: PopulatedGroupMemberUser; role: string; joinedAt: Date; }, 'user'> & {
       user: PopulatedGroupMemberUser;
       role: string;
@@ -81,23 +80,26 @@ export async function GET(request: NextRequest, { params }: { params: { groupId:
       _id: mongoose.Types.ObjectId;
       __v?: number;
     };
-    
+
+    // ترتيب الأعضاء: الأدمن أولاً
     const members = (await GroupMember.find({ group: groupId })
       .populate<{ user: PopulatedGroupMemberUser }>({
         path: 'user',
-        select: 'name avatar', 
+        select: 'name avatar',
         model: User
       })
       .select('user role joinedAt')
       .lean()) as PopulatedGroupMemberDoc[];
 
-    const membersList = members.map((member: PopulatedGroupMemberDoc) => ({ 
-      id: member.user._id.toString(),
-      name: member.user.name, 
-      avatar: member.user.avatar || null, 
-      role: member.role, 
-      joinedAt: member.joinedAt, 
-    }));
+    const membersList = members
+      .sort((a, b) => (a.role === 'admin' ? -1 : 1))
+      .map((member: PopulatedGroupMemberDoc) => ({
+        id: member.user._id.toString(),
+        name: member.user.name,
+        avatar: member.user.avatar || null,
+        role: member.role,
+        joinedAt: member.joinedAt,
+      }));
 
     return NextResponse.json({
       success: true,
@@ -108,6 +110,7 @@ export async function GET(request: NextRequest, { params }: { params: { groupId:
         coverImageUrl: group.coverImageUrl || null,
         adminId: group.admin,
         memberCount: group.memberCount,
+        createdAt: group.createdAt,
         currentUserRole: currentUserRole,
         isMember: isMember,
         isAdmin: isAdmin,
