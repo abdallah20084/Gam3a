@@ -15,32 +15,19 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const response = await axios.get('/api/user/me', {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (response.status === 200) {
-            router.replace('/'); // Redirect to homepage after successful login if already logged in
-          }
-        } catch (err: any) {
-          if (axios.isAxiosError(err) && err.response && (err.response.status === 401 || err.response.status === 403)) {
-            console.warn('Unauthorized or Forbidden: Removing invalid token and user data from localStorage.');
-            localStorage.removeItem('token');
-            localStorage.removeItem('userId');
-            localStorage.removeItem('userName');
-            localStorage.removeItem('isSuperAdmin');
-          } else {
-            console.error('Failed to verify token on login page due to network or server error:', err);
-          }
-        }
-      }
-    };
-    checkAuthStatus();
+    const token = localStorage.getItem('token');
+    if (token) {
+      axios.get('/api/user/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).then(res => {
+        if (res.status === 200) router.replace('/');
+      }).catch(err => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('userId');
+        localStorage.removeItem('userName');
+        localStorage.removeItem('isSuperAdmin');
+      });
+    }
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,14 +43,12 @@ export default function LoginPage() {
 
     try {
       const response = await axios.post('/api/auth/login', { phone: formattedPhone, password });
-      
       if (response.status === 200 && response.data.token) {
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('userName', response.data.userName);
         localStorage.setItem('userId', response.data.userId);
         localStorage.setItem('isSuperAdmin', response.data.isSuperAdmin ? 'true' : 'false');
-        
-        router.push('/'); // Redirect to homepage after successful new login
+        router.push('/');
       } else if (response.data.redirectToVerify && response.data.phone) {
         setError(response.data.message || 'حسابك غير مفعل. الرجاء توجيهك لصفحة التحقق.');
         router.push(`/auth/verify-otp?phone=${encodeURIComponent(response.data.phone)}`);
@@ -71,8 +56,7 @@ export default function LoginPage() {
         setError('خطأ غير معروف في تسجيل الدخول. الرجاء المحاولة مرة أخرى.');
       }
     } catch (err: any) {
-      console.error('Login error:', err);
-      if (axios.isAxiosError(err) && err.response && err.response.data && err.response.data.error) {
+      if (axios.isAxiosError(err) && err.response?.data?.error) {
         setError(err.response.data.error);
       } else {
         setError('حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.');
@@ -83,60 +67,62 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
+    <div className="min-vh-100 d-flex flex-column bg-light">
       <Navbar />
-      
-      <main className="flex-1 flex justify-center items-center w-full p-4">
-        <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-          <h1 className="text-2xl font-bold text-center mb-6">تسجيل الدخول</h1>
-          
-          {loading && <p className="text-center text-blue-500 mb-4">جاري تسجيل الدخول...</p>}
-
+      <main className="flex-grow-1 d-flex justify-content-center align-items-center w-100 p-4">
+        <div className="bg-white p-4 p-md-5 rounded-3 shadow w-100" style={{ maxWidth: 400 }}>
+          <h1 className="h4 fw-bold text-center mb-4">تسجيل الدخول</h1>
+          {loading && <p className="text-center text-primary mb-3">جاري تسجيل الدخول...</p>}
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
-              <span className="block sm:inline">{error}</span>
+            <div className="alert alert-danger py-2 text-center mb-3" role="alert">
+              {error}
             </div>
           )}
-
           <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <label htmlFor="phone" className="block text-gray-700 text-sm font-bold mb-2">رقم الهاتف:</label>
+            <div className="mb-3">
+              <label htmlFor="phone" className="form-label fw-semibold">رقم الهاتف</label>
               <input
                 type="text"
                 id="phone"
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline transition duration-200 ease-in-out focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="form-control"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 required
+                placeholder="01XXXXXXXXX"
+                autoComplete="username"
               />
             </div>
-            <div className="mb-6">
-              <label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">كلمة المرور:</label>
+            <div className="mb-4">
+              <label htmlFor="password" className="form-label fw-semibold">كلمة المرور</label>
               <input
                 type="password"
                 id="password"
-                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline transition duration-200 ease-in-out focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="form-control"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
               />
             </div>
-            <div className="flex items-center justify-between mt-6">
+            <div className="d-flex justify-content-between align-items-center mb-3">
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-primary px-4"
                 disabled={loading}
               >
                 {loading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول'}
               </button>
-              <Link href="#" className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800 transition duration-200 ease-in-out">
+              <Link href="#" className="text-primary small text-decoration-none">
                 نسيت كلمة المرور؟
               </Link>
             </div>
           </form>
-          <p className="text-center text-gray-600 text-sm mt-6">
-            ليس لديك حساب؟ <Link href="/auth/register" className="text-blue-500 hover:text-blue-800 font-bold transition duration-200 ease-in-out">سجل الآن</Link>
-          </p>
+          <div className="text-center mt-3">
+            <span className="text-secondary small">ليس لديك حساب؟ </span>
+            <Link href="/auth/register" className="text-primary fw-bold small text-decoration-none">
+              سجل الآن
+            </Link>
+          </div>
         </div>
       </main>
     </div>

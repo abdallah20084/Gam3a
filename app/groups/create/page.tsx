@@ -5,9 +5,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import Head from 'next/head';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline'; 
-import DOMPurify from 'dompurify'; // <--- استيراد DOMPurify
+import Navbar from '@/components/Navbar';
+import DOMPurify from 'dompurify';
 
 export default function CreateGroupPage() {
   const [name, setName] = useState('');
@@ -16,7 +15,7 @@ export default function CreateGroupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false); 
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
 
   const router = useRouter();
 
@@ -44,7 +43,6 @@ export default function CreateGroupPage() {
     }
 
     try {
-      // <--- FIX: Sanitize name and description before sending to API
       const sanitizedName = DOMPurify.sanitize(name.trim());
       const sanitizedDescription = DOMPurify.sanitize(description.trim());
 
@@ -66,7 +64,6 @@ export default function CreateGroupPage() {
         router.push(`/group/${response.data.group._id}`);
       }
     } catch (err: any) {
-      console.error('Error creating group:', err);
       if (axios.isAxiosError(err) && err.response && err.response.data && err.response.data.error) {
         setError(err.response.data.error);
       } else {
@@ -82,33 +79,31 @@ export default function CreateGroupPage() {
   }
 
   return (
-    <>
-      <Head>
-        <title>إنشاء مجموعة جديدة - تطبيق الدردشة الجماعية</title>
-        <meta name="description" content="أنشئ مجموعة دردشة جديدة بسهولة وادعُ أصدقاءك." />
-      </Head>
-
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 flex items-center justify-center">
-        <div className="max-w-md w-full bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700">
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      <Navbar />
+      <main className="flex-1 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-xl border border-gray-200">
           <button
             onClick={() => router.back()}
-            className="text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-4 flex items-center transition-colors duration-200"
+            className="text-gray-600 hover:text-indigo-600 mb-4 flex items-center transition-colors duration-200"
           >
-            <ArrowLeftIcon className="h-5 w-5 mr-2" />
+            <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
             العودة
           </button>
-          <h1 className="text-3xl font-extrabold text-center mb-6 text-indigo-700 dark:text-indigo-400">
+          <h1 className="text-3xl font-extrabold text-center mb-6 text-indigo-700">
             إنشاء مجموعة جديدة
           </h1>
 
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 dark:bg-red-900 dark:text-red-300" role="alert">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
               <strong className="font-bold">خطأ!</strong>
               <span className="block sm:inline"> {error}</span>
             </div>
           )}
           {success && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4 dark:bg-green-900 dark:text-green-300" role="alert">
+            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4" role="alert">
               <strong className="font-bold">نجاح!</strong>
               <span className="block sm:inline"> {success}</span>
             </div>
@@ -116,7 +111,7 @@ export default function CreateGroupPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                 اسم المجموعة
               </label>
               <input
@@ -124,14 +119,14 @@ export default function CreateGroupPage() {
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 required
                 disabled={loading}
               />
             </div>
 
             <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
                 وصف المجموعة
               </label>
               <textarea
@@ -139,14 +134,14 @@ export default function CreateGroupPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
-                className="mt-1 block w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm resize-y"
+                className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm resize-y"
                 required
                 disabled={loading}
               ></textarea>
             </div>
 
             <div>
-              <label htmlFor="coverImageUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label htmlFor="coverImageUrl" className="block text-sm font-medium text-gray-700 mb-1">
                 رابط صورة الغلاف (اختياري)
               </label>
               <input
@@ -154,7 +149,7 @@ export default function CreateGroupPage() {
                 id="coverImageUrl"
                 value={coverImageUrl}
                 onChange={(e) => setCoverImageUrl(e.target.value)}
-                className="mt-1 block w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 placeholder="مثال: https://example.com/image.jpg"
                 disabled={loading}
               />
@@ -180,7 +175,7 @@ export default function CreateGroupPage() {
             </div>
           </form>
         </div>
-      </div>
-    </>
+      </main>
+    </div>
   );
 }

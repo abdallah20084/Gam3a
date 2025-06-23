@@ -1,5 +1,5 @@
 // models/Post.ts
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export interface IPost extends Document {
   content?: string;
@@ -29,14 +29,6 @@ const PostSchema: Schema = new Schema({
     type: Boolean,
     default: false, // هل تم تصنيف المحتوى على أنه NSFW؟ (مخفي/محظور إذا كان true)
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
   group: {
     type: Schema.Types.ObjectId,
     ref: 'Group', // يشير إلى نموذج Group
@@ -47,8 +39,8 @@ const PostSchema: Schema = new Schema({
     ref: 'User', // يشير إلى نموذج User
     required: true,
   },
-});
+}, { timestamps: true });
 
-const Post = mongoose.models.Post || mongoose.model<IPost>('Post', PostSchema);
+const Post: Model<IPost> = mongoose.models.Post || mongoose.model<IPost>('Post', PostSchema);
 
 export default Post;

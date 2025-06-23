@@ -7,8 +7,13 @@ import { parse } from 'url';
 import next from 'next';
 import { Server as SocketIOServer } from 'socket.io';
 import mongoose from 'mongoose';
-import * as jwt from 'jsonwebtoken'; // <--- FIX: Ensure this line is exactly here
-// import { LeanDocument } from 'mongoose'; // This line is not needed and was removed previously
+import * as jwt from 'jsonwebtoken';
+import DOMPurify from 'dompurify';
+import { JSDOM } from 'jsdom';
+
+// Setup DOMPurify for server-side sanitization
+const window = new JSDOM('').window as unknown as Window;
+const domPurify = DOMPurify(window as any);
 
 // Import your Mongoose models and db connection
 import connectDB from './lib/db';
@@ -18,7 +23,7 @@ import User, { IUser } from './models/User';
 import Group, { IGroup } from './models/Group';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = '0.0.0.0'; 
+const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
 
 const app = next({ dev, hostname, port });
@@ -44,8 +49,8 @@ interface FormattedMessage {
   senderAvatar: string | null;
   content: string;
   timestamp: string;
-  isSystemMessage?: boolean; 
-  isEdited?: boolean; 
+  isSystemMessage?: boolean;
+  isEdited?: boolean;
 }
 
 type PopulatedMessageLean = Omit<IMessage, 'sender'> & {
@@ -65,7 +70,6 @@ type GroupLeanType = Pick<IGroup, '_id' | 'admin'> & {
 type UserLeanNameType = Pick<IUser, '_id' | 'name'> & {
   name: string;
 };
-
 
 app.prepare().then(() => {
   console.log('Next.js app prepared. Creating HTTP server...');
@@ -94,7 +98,6 @@ app.prepare().then(() => {
   console.log('Socket.IO: Server initialized successfully via custom server.');
   console.log(`Server using JWT_SECRET for verification (first 10 chars): ${JWT_SECRET!.substring(0, 10)}...`);
 
-
   if (io) {
     setInterval(() => {
       const now = new Date();
@@ -108,7 +111,6 @@ app.prepare().then(() => {
 
     io.on('connection', (socket) => {
       console.log(`Socket.IO: Client connected - ID: ${socket.id}`);
-      
 
       const updateActivity = () => {
         const user = connectedUsers.get(socket.id);
@@ -118,38 +120,48 @@ app.prepare().then(() => {
       };
       socket.onAny(updateActivity);
 
+      // متغير لتخزين اسم المستخدم الحالي
+      let currentUserName: string | null = null;
+      let currentUserId: string | null = null;
+
       socket.on('joinGroup', async (groupId: string, token: string) => {
         try {
           await connectDB();
 
           if (!mongoose.Types.ObjectId.isValid(groupId)) {
             socket.emit('errorJoiningGroup', 'معرف مجموعة غير صالح.');
+            socket.disconnect();
             return;
           }
 
           let userId: mongoose.Types.ObjectId;
           let isSuperAdmin = false;
           try {
-            console.log(`Attempting to verify token for socket ${socket.id}. Token (first 20 chars): ${token.substring(0, 20)}...`);
             const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string; isSuperAdmin?: boolean };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
             isSuperAdmin = decodedToken.isSuperAdmin || false;
+            currentUserId = userId.toString();
           } catch (jwtError: any) {
-            console.error(`Socket ${socket.id}: JWT Verification FAILED! Error details:`, jwtError);
-            console.warn(`Socket ${socket.id}: Invalid token for joinGroup. Token Error: ${jwtError.message}`);
             socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية. الرجاء إعادة تسجيل الدخول.');
+            socket.disconnect();
             return;
           }
 
+          const userDoc = await User.findById(userId, { name: 1 }).lean();
+          currentUserName = userDoc?.name || 'مستخدم';
+          if (!userDoc) {
+            socket.emit('errorJoiningGroup', 'المستخدم غير موجود.');
+            socket.disconnect();
+            return;
+          }
           const isMember = await GroupMember.exists({ group: groupId, user: userId });
           if (!isMember && !isSuperAdmin) {
-            console.warn(`Socket ${socket.id}: User ${userId} is not a member of group ${groupId} and not super admin. Access denied.`);
             socket.emit('errorJoiningGroup', 'غير مصرح لك بالانضمام إلى هذه المجموعة.');
+            socket.disconnect();
             return;
           }
 
           socket.join(groupId);
-          console.log(`Socket ${socket.id} (User ${userId}) joined group ${groupId}`);
 
           let userData = connectedUsers.get(socket.id);
           if (!userData) {
@@ -165,31 +177,62 @@ app.prepare().then(() => {
 
           userConnectionCount.set(userId.toString(), (userConnectionCount.get(userId.toString()) || 0) + 1);
           if (userConnectionCount.get(userId.toString()) === 1) {
-              io!.emit('userStatusUpdate', { userId: userId.toString(), isOnline: true });
-              console.log(`User ${userId} is now ONLINE.`);
+            io!.emit('userStatusUpdate', { userId: userId.toString(), isOnline: true });
           }
 
+          // بث رسالة انضمام عضو جديد
+          io!.to(groupId).emit('receiveMessage', {
+            id: new mongoose.Types.ObjectId().toString(),
+            groupId,
+            senderId: userId.toString(),
+            senderName: currentUserName,
+            senderAvatar: null,
+            content: `🟢 ${currentUserName} انضم إلى المجموعة.`,
+            timestamp: new Date().toISOString(),
+            isSystemMessage: true,
+          });
+
+          // جلب الرسائل القديمة
           const oldMessages = await Message.find({ group: groupId })
             .sort({ timestamp: -1 })
             .limit(50)
-            .populate<{ sender: Pick<IUser, 'name' | 'avatar'> & { _id: mongoose.Types.ObjectId } }>({
-              path: 'sender',
-              select: 'name avatar',
-              model: User,
-            })
-            .lean() as PopulatedMessageLean[];
+            .populate('sender', 'name avatar')
+            .lean();
 
+          if (!Array.isArray(oldMessages)) {
+            socket.emit('errorJoiningGroup', 'حدث خطأ أثناء جلب الرسائل القديمة.');
+            socket.disconnect();
+            return;
+          }
+          for (const msg of oldMessages) {
+            // إذا كان sender عبارة عن ObjectId أو لا يوجد name
+            if (
+              !msg.sender ||
+              typeof msg.sender !== 'object' ||
+              !('name' in msg.sender)
+            ) {
+              socket.emit('errorJoiningGroup', 'حدث خطأ أثناء جلب بيانات المرسل.');
+              socket.disconnect();
+              return;
+            }
+          }
+          const formattedOldMessages: FormattedMessage[] = oldMessages.map((msg) => {
+            // تأكد أن sender هو object وفيه name وavatar
+            const sender = (typeof msg.sender === 'object' && msg.sender && 'name' in msg.sender)
+              ? msg.sender as { _id: any; name: string; avatar?: string }
+              : { _id: '', name: 'مستخدم', avatar: null };
 
-          const formattedOldMessages: FormattedMessage[] = oldMessages.map((msg) => ({
-            id: msg._id.toString(),
-            groupId: msg.group.toString(),
-            senderId: msg.sender._id.toString(),
-            senderName: msg.sender.name,
-            senderAvatar: msg.sender.avatar || null,
-            content: msg.content,
-            timestamp: msg.timestamp.toISOString(),
-            isEdited: false,
-          }));
+            return {
+              id: msg._id.toString(),
+              groupId: msg.group.toString(),
+              senderId: sender._id.toString(),
+              senderName: sender.name,
+              senderAvatar: sender.avatar || null,
+              content: msg.content,
+              timestamp: msg.timestamp.toISOString(),
+              isEdited: false,
+            };
+          });
 
           socket.emit('joinedGroup', {
             groupId,
@@ -197,8 +240,8 @@ app.prepare().then(() => {
           });
 
         } catch (error: any) {
-          console.error(`Socket ${socket.id}: Server error joining group ${groupId}:`, error);
           socket.emit('errorJoiningGroup', 'حدث خطأ غير متوقع أثناء الانضمام إلى المجموعة. الرجاء المحاولة لاحقاً.');
+          socket.disconnect();
         }
       });
 
@@ -213,13 +256,14 @@ app.prepare().then(() => {
             return;
           }
 
-          const trimmedContent = content.trim();
-          if (!trimmedContent) {
+          // تنظيف المحتوى من أي أكواد ضارة
+          const sanitizedContent = domPurify.sanitize(content.trim());
+          if (!sanitizedContent) {
             socket.emit('messageError', 'محتوى الرسالة لا يمكن أن يكون فارغاً.');
             return;
           }
 
-          if (trimmedContent.length > 1000) {
+          if (sanitizedContent.length > 1000) {
             socket.emit('messageError', 'الرسالة طويلة جداً (الحد الأقصى 1000 حرف).');
             return;
           }
@@ -246,13 +290,11 @@ app.prepare().then(() => {
           const newMessage = new Message({
             group: groupId,
             sender: userId,
-            content: trimmedContent,
+            content: sanitizedContent,
           });
           await newMessage.save();
 
-          const senderUser = await User.findById(userId)
-            .select('name avatar')
-            .lean() as (Pick<IUser, 'name' | 'avatar'> & { _id: mongoose.Types.ObjectId }) | null;
+          const senderUser = await User.findById(userId, { name: 1, avatar: 1 }).lean();
 
           if (!senderUser) {
             console.error(`Socket ${socket.id}: Sender user not found for message: ${userId}`);
@@ -320,7 +362,7 @@ app.prepare().then(() => {
           await Message.deleteOne({ _id: messageId });
           console.log(`Socket ${socket.id}: Message ${messageId} deleted by user ${userId} in group ${groupId}.`);
 
-          const deleterUser = await User.findById(userId).select('name').lean() as (UserLeanNameType | null);
+          const deleterUser = await User.findById(userId, { name: 1 }).lean();
           const deleterName = deleterUser?.name || 'مستخدم غير معروف';
 
           const systemMessage: FormattedMessage = {
@@ -413,25 +455,20 @@ app.prepare().then(() => {
       });
 
       socket.on('disconnect', () => {
-        console.log(`Socket.IO: Client disconnected - ID: ${socket.id}`);
         const userData = connectedUsers.get(socket.id);
         if (userData) {
-          connectedUsers.delete(userData.socketId);
-          userConnectionCount.set(userData.userId, (userConnectionCount.get(userData.userId) || 1) - 1);
+          userConnectionCount.set(userData.userId, (userConnectionCount.get(userData.userId) || 0) - 1);
           if (userConnectionCount.get(userData.userId) === 0) {
             io!.emit('userStatusUpdate', { userId: userData.userId, isOnline: false });
-            console.log(`User ${userData.userId} is now OFFLINE.`);
           }
+          connectedUsers.delete(socket.id);
+          console.log(`Socket.IO: Client disconnected - ID: ${socket.id}`);
         }
       });
     });
   }
 
   httpServer.listen(port, hostname, () => {
-    console.log(`Next.js app running on http://${hostname}:${port} (Access via ${hostname === '0.0.0.0' ? 'your_ip_address' : hostname}:${port})`);
-    console.log('*** Server is fully listening and should be ready to accept connections. ***');
+    console.log(`Server listening on http://${hostname}:${port}`);
   });
-}).catch((err) => {
-  console.error('Failed to prepare Next.js app or start server:', err);
-  process.exit(1);
 });

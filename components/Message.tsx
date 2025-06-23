@@ -1,12 +1,10 @@
 // models/Message.ts
 import mongoose, { Schema, Document } from 'mongoose';
-// استيراد الواجهة IUser باستخدام المسار المطلق (alias)
-import type { IUser } from '@/models/User'; // <--- هذا هو التغيير
+import type { IUser } from '@/models/User';
 
 // تعريف الواجهة IMessage
 export interface IMessage extends Document {
   group: mongoose.Types.ObjectId;
-  // استخدام PopulatedDoc لتحديد أن 'sender' يمكن أن يكون ObjectId أو مستند IUser معبأ
   sender: mongoose.PopulatedDoc<IUser, mongoose.Types.ObjectId>;
   content: string;
   timestamp: Date;

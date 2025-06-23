@@ -5,8 +5,8 @@ export interface IGroup extends Document {
   name: string;
   description?: string;
   coverImageUrl?: string;
-  admin: mongoose.Types.ObjectId; // Reference to User model
-  memberCount: number; // Field to store the number of members
+  admin: mongoose.Types.ObjectId;
+  memberCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -14,11 +14,11 @@ export interface IGroup extends Document {
 const GroupSchema: Schema = new Schema({
   name: { type: String, required: true, trim: true },
   description: { type: String, trim: true },
-  coverImageUrl: { type: String }, // Optional field for group cover image
+  coverImageUrl: { type: String },
   admin: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  memberCount: { type: Number, default: 0 }, // Initialize memberCount to 0
+  memberCount: { type: Number, default: 0 },
 }, {
-  timestamps: true, // Adds createdAt and updatedAt timestamps
+  timestamps: true,
 });
 
 const Group: Model<IGroup> = mongoose.models.Group || mongoose.model<IGroup>('Group', GroupSchema);

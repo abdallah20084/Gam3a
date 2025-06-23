@@ -1,7 +1,8 @@
 // components/GroupChat.tsx
-"use client"; // <--- ADD THIS LINE AT THE VERY TOP
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { io } from "socket.io-client";
 
 // نوع placeholder مؤقت للسوكيت إذا كنت لا تزال تواجه مشاكل في TypeScript.
 // إذا تم حل مشاكل أنواع Socket.IO، يمكنك استخدام import { Socket } from 'socket.io-client';
@@ -18,6 +19,7 @@ const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId }) => {
   const [socket, setSocket] = useState<ClientSocket | null>(null);
   const [messageInput, setMessageInput] = useState<string>('');
   const [messages, setMessages] = useState<any[]>([]); // لتخزين الرسائل المستلمة
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // تأكد من أن السوكيت لم يتم تهيئته بالفعل
@@ -48,7 +50,7 @@ const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId }) => {
 
       // الاستماع لأخطاء الاتصال
       newSocket.on("connect_error", (err: { message: any; }) => {
-        console.error("Socket connection error:", err.message);
+        // يمكنك عرض رسالة خطأ هنا إذا أردت
       });
 
       // دالة التنظيف: قطع الاتصال عند إلغاء تحميل المكون
@@ -60,6 +62,10 @@ const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId }) => {
     // إذا كان السوكيت موجودًا بالفعل، لا تفعل شيئًا لمنع إعادة التهيئة المزدوجة
     return () => {};
   }, [groupId, socket]); // أضف groupId كـ dependency إذا كان يمكن أن يتغير في عمر المكون
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSendMessage = () => {
     if (socket && messageInput.trim()) { // تأكد أن السوكيت متصل والرسالة ليست فارغة
@@ -85,41 +91,73 @@ const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId }) => {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: 'auto', border: '1px solid #ddd', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-      <h1 style={{ textAlign: 'center', color: '#333' }}>Group Chat for: {groupId}</h1>
-      <div style={{ border: '1px solid #eee', height: '300px', overflowY: 'scroll', padding: '15px', marginBottom: '15px', backgroundColor: '#f9f9f9', borderRadius: '5px' }}>
-        {messages.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#666' }}>No messages yet. Start chatting!</p>
-        ) : (
-          messages.map((msg, index) => (
-            <div key={index} style={{ marginBottom: '10px', padding: '8px', borderRadius: '5px', backgroundColor: msg.senderId === "You" ? '#e0f7fa' : '#ffffff', border: msg.senderId === "You" ? '1px solid #b2ebf2' : '1px solid #f0f0f0' }}>
-              <strong style={{ color: msg.senderId === "You" ? '#00796b' : '#3f51b5' }}>{msg.senderId}:</strong> {msg.messageContent}
-              <span style={{ fontSize: '0.8em', color: '#888', marginLeft: '10px' }}>{new Date(msg.timestamp).toLocaleTimeString()}</span>
-            </div>
-          ))
-        )}
-      </div>
-      <div style={{ display: 'flex' }}>
-        <input
-          type="text"
-          value={messageInput}
-          onChange={(e) => setMessageInput(e.target.value)}
-          onKeyPress={(e) => { // إرسال الرسالة عند الضغط على Enter
-            if (e.key === 'Enter') {
-              handleSendMessage();
-            }
+    <div className="container my-4">
+      <div className="card shadow-sm mx-auto" style={{ maxWidth: 600 }}>
+        <div className="card-header text-center bg-primary text-white fw-bold">
+          دردشة المجموعة: {groupId}
+        </div>
+        <div
+          className="card-body"
+          style={{
+            height: 320,
+            overflowY: "auto",
+            background: "#f8f9fa",
+            borderBottom: "1px solid #eee",
           }}
-          placeholder="Type your message here..."
-          style={{ flexGrow: 1, padding: '10px', borderRadius: '5px', border: '1px solid #ccc', marginRight: '10px' }}
-        />
-        <button
-          onClick={handleSendMessage}
-          style={{ padding: '10px 20px', borderRadius: '5px', border: 'none', backgroundColor: '#4CAF50', color: 'white', cursor: 'pointer' }}
         >
-          Send
-        </button>
+          {messages.length === 0 ? (
+            <p className="text-center text-muted">لا توجد رسائل بعد. ابدأ الدردشة!</p>
+          ) : (
+            messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`mb-2 p-2 rounded ${
+                  msg.senderId === "You"
+                    ? "bg-info text-end text-white"
+                    : "bg-light text-start"
+                }`}
+              >
+                <span className="fw-bold">
+                  {msg.senderId === "You" ? "أنت" : msg.senderId}
+                </span>
+                : {msg.messageContent}
+                <span className="d-block text-end text-secondary small mt-1">
+                  {new Date(msg.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        <div className="card-footer bg-white">
+          <div className="input-group">
+            <input
+              type="text"
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSendMessage();
+              }}
+              className="form-control"
+              placeholder="اكتب رسالتك هنا..."
+              disabled={!socket}
+            />
+            <button
+              onClick={handleSendMessage}
+              className="btn btn-primary"
+              type="button"
+              disabled={!socket || !messageInput.trim()}
+            >
+              إرسال
+            </button>
+          </div>
+          {!socket && (
+            <div className="text-danger text-center mt-2 small">
+              جاري الاتصال بسيرفر الدردشة...
+            </div>
+          )}
+        </div>
       </div>
-      {!socket && <p style={{ color: 'red', textAlign: 'center', marginTop: '10px' }}>Connecting to chat server...</p>}
     </div>
   );
 };

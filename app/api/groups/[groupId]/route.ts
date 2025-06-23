@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Group from '@/models/Group';
 import GroupMember from '@/models/GroupMember';
-import Message from '@/models/Message'; 
+import Message from '@/models/Message';
 import User, { IUser } from '@/models/User';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
@@ -83,13 +83,13 @@ export async function GET(request: NextRequest, { params }: { params: { groupId:
 
     // ترتيب الأعضاء: الأدمن أولاً
     const members = (await GroupMember.find({ group: groupId })
-      .populate<{ user: PopulatedGroupMemberUser }>({
+      .populate<{ user: PopulatedGroupMemberUser; }>({
         path: 'user',
         select: 'name avatar',
         model: User
       })
       .select('user role joinedAt')
-      .lean()) as PopulatedGroupMemberDoc[];
+      .lean()) as unknown as PopulatedGroupMemberDoc[];
 
     const membersList = members
       .sort((a, b) => (a.role === 'admin' ? -1 : 1))
@@ -211,12 +211,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { group
 
     // 1. Delete all members of this group
     await GroupMember.deleteMany({ group: groupId });
-
     // 2. Delete all messages related to this group
-    await Message.deleteMany({ group: groupId }); 
-
+    await (Message as mongoose.Model<any>).deleteMany({ group: groupId });
     // 3. Delete the group itself
-    await Group.findByIdAndDelete(groupId);
+    const deletedGroup = await Group.findByIdAndDelete(groupId);
+    if (!deletedGroup) {
+      return NextResponse.json({ success: false, error: 'المجموعة غير موجودة.' }, { status: 404 });
+    }
 
     // --- END: Removed Transaction Logic ---
 

@@ -450,52 +450,54 @@ export default function GroupChatPage() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <Navbar />
-      <main className="flex-1 p-6 container mx-auto flex">
-        {/* Left Section: Main Chat Area */}
-        <div className="flex-1 bg-white rounded-lg shadow-md p-6 mr-4 flex flex-col">
-          <h1 className="text-3xl font-bold mb-4">{group.name}</h1>
-          <p className="text-gray-600 mb-4">{group.memberCount} أعضاء</p>
-          <div className="flex border-b border-gray-200 mb-4">
-            <button className="py-2 px-4 text-blue-600 border-b-2 border-blue-600 font-semibold">الدردشة</button>
-            <button className="py-2 px-4 text-gray-600 hover:text-gray-800">الفيديوهات</button>
-            <button className="py-2 px-4 text-gray-600 hover:text-gray-800">الصور</button>
-            <button className="py-2 px-4 text-gray-600 hover:text-gray-800">PDFs</button>
-            <button className="py-2 px-4 text-gray-600 hover:text-gray-800">تسجيلات صوتية</button>
-            <button className="py-2 px-4 text-gray-600 hover:text-gray-800">روابط</button>
-          </div>
-          <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50 mb-4 flex flex-col" style={{ minHeight: '300px' }}>
-            {messages.length === 0 && !loading ? (
-              <p className="text-center text-gray-500">لا توجد رسائل بعد. ابدأ الدردشة!</p>
-            ) : (
-              messages.map((msg) => {
-                const senderInfo = group?.members.find(member => member.id === msg.sender);
-                const displaySenderName = senderInfo?.name || 'مستخدم غير معروف';
-                const displaySenderAvatar = senderInfo?.avatar || '/default-avatar.png';
-                const isSystemMessage = msg.isSystemMessage || false;
-                return (
-                  <div
-                    key={msg.id}
-                    className={`mb-2 p-3 rounded-lg max-w-[70%] relative group ${
-                      msg.sender === currentUserId ? 'bg-blue-200 self-end' : 'bg-gray-200 self-start'
-                    } ${isSystemMessage ? 'bg-yellow-100 text-yellow-800 self-center text-center max-w-[90%]' : ''}`}
-                  >
-                      {!isSystemMessage ? (
-                          <>
-                              <div className="flex items-center mb-1">
-                                  <img
-                                  src={displaySenderAvatar}
-                                  alt={displaySenderName}
-                                  className="w-8 h-8 rounded-full object-cover mr-2"
-                                  />
-                                  <p className="font-semibold text-gray-800">{displaySenderName}</p>
-                              </div>
-                              {editingMessageId === msg.id ? (
-                                  <div className="flex flex-col">
-                                      <input
-                                          type="text"
-                                          value={editingContent}
-                                          onChange={(e) => setEditingContent(e.target.value)}
-                                          className="border rounded px-2 py-1 mb-2 w-full text-gray-700"
+      <main className="container-fluid py-3">
+        <div className="row">
+          <div className="col-12 col-lg-9 mb-3">
+            {/* منطقة الدردشة */}
+            <div className="flex-1 bg-white rounded-lg shadow-md p-6 mr-4 flex flex-col">
+              <h1 className="text-3xl font-bold mb-4">{group.name}</h1>
+              <p className="text-gray-600 mb-4">{group.memberCount} أعضاء</p>
+              <div className="flex border-b border-gray-200 mb-4">
+                <button className="py-2 px-4 text-blue-600 border-b-2 border-blue-600 font-semibold">الدردشة</button>
+                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">الفيديوهات</button>
+                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">الصور</button>
+                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">PDFs</button>
+                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">تسجيلات صوتية</button>
+                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">روابط</button>
+              </div>
+              <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50 mb-4 flex flex-col" style={{ minHeight: '300px' }}>
+                {messages.length === 0 && !loading ? (
+                  <p className="text-center text-gray-500">لا توجد رسائل بعد. ابدأ الدردشة!</p>
+                ) : (
+                  messages.map((msg) => {
+                    const senderInfo = group?.members.find(member => member.id === msg.sender);
+                    const displaySenderName = senderInfo?.name || 'مستخدم غير معروف';
+                    const displaySenderAvatar = senderInfo?.avatar || '/default-avatar.png';
+                    const isSystemMessage = msg.isSystemMessage || false;
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`mb-2 p-3 rounded-lg max-w-[70%] relative group ${
+                          msg.sender === currentUserId ? 'bg-blue-200 self-end' : 'bg-gray-200 self-start'
+                        } ${isSystemMessage ? 'bg-yellow-100 text-yellow-800 self-center text-center max-w-[90%]' : ''}`}
+                      >
+                          {!isSystemMessage ? (
+                              <>
+                                  <div className="flex items-center mb-1">
+                                      <img
+                                      src={displaySenderAvatar}
+                                      alt={displaySenderName}
+                                      className="w-8 h-8 rounded-full object-cover mr-2"
+                                      />
+                                      <p className="font-semibold text-gray-800">{displaySenderName}</p>
+                                  </div>
+                                  {editingMessageId === msg.id ? (
+                                      <div className="flex flex-col">
+                                          <input
+                                              type="text"
+                                              value={editingContent}
+                                              onChange={(e) => setEditingContent(e.target.value)}
+                                              className="border rounded px-2 py-1 mb-2 w-full text-gray-700"
                                       />
                                       <div className="flex justify-end space-x-2 rtl:space-x-reverse">
                                           <button onClick={submitEdit} className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
@@ -506,138 +508,142 @@ export default function GroupChatPage() {
                                           </button>
                                       </div>
                                   </div>
-                              ) : (
-                                  <p className="text-gray-700" dangerouslySetInnerHTML={{ __html: msg.content }}></p>
-                              )}
-                              <p className="text-xs text-gray-500 mt-1 text-right">
-                                  {new Date(msg.timestamp).toLocaleTimeString()}
-                                  {msg.isEdited && <span className="ml-2 text-blue-500">(مُعدلة)</span>}
-                              </p>
-                              <Popover>
-                                  <PopoverTrigger asChild>
-                                      <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                      >
-                                          <MoreHorizontal className="h-4 w-4" />
-                                      </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-auto p-1 flex flex-col space-y-1">
-                                      {msg.sender === currentUserId && (
+                                  ) : (
+                                      <p className="text-gray-700" dangerouslySetInnerHTML={{ __html: msg.content }}></p>
+                                  )}
+                                  <p className="text-xs text-gray-500 mt-1 text-right">
+                                      {new Date(msg.timestamp).toLocaleTimeString()}
+                                      {msg.isEdited && <span className="ml-2 text-blue-500">(مُعدلة)</span>}
+                                  </p>
+                                  <Popover>
+                                      <PopoverTrigger asChild>
                                           <Button
                                               variant="ghost"
-                                              className="w-full justify-start text-sm"
-                                              onClick={() => startEditing(msg)}
+                                              size="icon"
+                                              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
                                           >
-                                              تعديل
+                                              <MoreHorizontal className="h-4 w-4" />
                                           </Button>
-                                      )}
-                                      {(isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
-                                          <Button
-                                              variant="ghost"
-                                              className="w-full justify-start text-sm text-red-500 hover:text-red-600"
-                                              onClick={() => handleDeleteMessage(msg.id)}
-                                          >
-                                              حذف
-                                          </Button>
-                                      )}
-                                  </PopoverContent>
-                              </Popover>
-                          </>
-                      ) : (
-                          <p className="text-sm italic" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }}></p>
-                      )}
-                  </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-          {typingUsers.size > 0 && (
-            <div className="text-gray-600 text-sm mb-2">
-              {Array.from(typingUsers)
-                .map(userId => group.members.find(m => m.id === userId)?.name || 'مستخدم غير معروف')
-                .filter(Boolean) 
-                .join(', ')}{' '}
-              يكتب...
-            </div>
-          )}
-          <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => {
-                setNewMessage(e.target.value);
-                handleTyping(e.target.value.length > 0); 
-              }}
-              placeholder="اكتب رسالة..."
-              className="flex-1 border rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={!group.isMember || !isConnected}
-            />
-            <button
-              type="submit"
-              className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-colors"
-              disabled={!group.isMember || !isConnected || newMessage.trim() === ''}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </button>
-          </form>
-          {!group.isMember && (
-            <p className="text-red-500 text-sm mt-2 text-center">يجب أن تكون عضواً في هذه المجموعة لإرسال الرسائل.</p>
-          )}
-          {!isConnected && (
-            <p className="text-orange-500 text-sm mt-2 text-center">جاري الاتصال بخادم الدردشة...</p>
-          )}
-        </div>
-        {/* Right Section: Group Info & Members */}
-        <div className="w-1/4 bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold mb-4">معلومات المجموعة</h2>
-          {group.coverImageUrl && (
-            <img
-              src={group.coverImageUrl}
-              alt={group.name}
-              className="w-full h-32 object-cover rounded-lg mb-4"
-            />
-          )}
-          <p className="text-gray-700 mb-2">{group.description}</p>
-          <div className="flex items-center text-sm text-gray-500 mb-4 gap-3">
-            <span>عدد الأعضاء: {group.memberCount}</span>
-            {group.createdAt && (
-              <span>تأسست: {new Date(group.createdAt).toLocaleDateString()}</span>
-            )}
-          </div>
-          <h3 className="text-lg font-bold mb-3">الأعضاء ({group.members.length})</h3>
-          <div className="space-y-3">
-            {group.members
-              .sort((a, b) => (a.role === 'admin' ? -1 : 1))
-              .map((member) => (
-                <div key={member.id} className="flex items-center space-x-3">
-                  <div className="relative">
-                    <img
-                      src={member.avatar || '/default-avatar.png'}
-                      alt={member.name}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                    <span
-                      className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white ${
-                        onlineUsers.has(member.id) ? 'bg-green-500' : 'bg-gray-400'
-                      }`}
-                    ></span>
-                  </div>
-                  <div>
-                    <p className="font-semibold flex items-center gap-1">
-                      {member.name}
-                      {member.role === 'admin' && (
-                        <span className="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">مشرف</span>
-                      )}
-                    </p>
-                    <p className="text-sm text-gray-500">{member.role !== 'admin' ? member.role : ''}</p>
-                  </div>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-1 flex flex-col space-y-1">
+                                          {msg.sender === currentUserId && (
+                                              <Button
+                                                  variant="ghost"
+                                                  className="w-full justify-start text-sm"
+                                                  onClick={() => startEditing(msg)}
+                                              >
+                                                  تعديل
+                                              </Button>
+                                          )}
+                                          {(isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
+                                              <Button
+                                                  variant="ghost"
+                                                  className="w-full justify-start text-sm text-red-500 hover:text-red-600"
+                                                  onClick={() => handleDeleteMessage(msg.id)}
+                                              >
+                                                  حذف
+                                              </Button>
+                                          )}
+                                      </PopoverContent>
+                                  </Popover>
+                              </>
+                          ) : (
+                              <p className="text-sm italic" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }}></p>
+                          )}
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+              {typingUsers.size > 0 && (
+                <div className="text-gray-600 text-sm mb-2">
+                  {Array.from(typingUsers)
+                    .map(userId => group.members.find(m => m.id === userId)?.name || 'مستخدم غير معروف')
+                    .filter(Boolean) 
+                    .join(', ')}{' '}
+                  يكتب...
                 </div>
-              ))}
+              )}
+              <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
+                <input
+                  type="text"
+                  value={newMessage}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    handleTyping(e.target.value.length > 0); 
+                  }}
+                  placeholder="اكتب رسالة..."
+                  className="flex-1 border rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={!group.isMember || !isConnected}
+                />
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-colors"
+                  disabled={!group.isMember || !isConnected || newMessage.trim() === ''}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </button>
+              </form>
+              {!group.isMember && (
+                <p className="text-red-500 text-sm mt-2 text-center">يجب أن تكون عضواً في هذه المجموعة لإرسال الرسائل.</p>
+              )}
+              {!isConnected && (
+                <p className="text-orange-500 text-sm mt-2 text-center">جاري الاتصال بخادم الدردشة...</p>
+              )}
+            </div>
+          </div>
+          <div className="col-12 col-lg-3">
+            {/* معلومات المجموعة */}
+            <div className="w-full bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold mb-4">معلومات المجموعة</h2>
+              {group.coverImageUrl && (
+                <img
+                  src={group.coverImageUrl}
+                  alt={group.name}
+                  className="w-full h-32 object-cover rounded-lg mb-4"
+                />
+              )}
+              <p className="text-gray-700 mb-2">{group.description}</p>
+              <div className="flex items-center text-sm text-gray-500 mb-4 gap-3">
+                <span>عدد الأعضاء: {group.memberCount}</span>
+                {group.createdAt && (
+                  <span>تأسست: {new Date(group.createdAt).toLocaleDateString()}</span>
+                )}
+              </div>
+              <h3 className="text-lg font-bold mb-3">الأعضاء ({group.members.length})</h3>
+              <div className="space-y-3">
+                {group.members
+                  .sort((a, b) => (a.role === 'admin' ? -1 : 1))
+                  .map((member) => (
+                    <div key={member.id} className="flex items-center space-x-3">
+                      <div className="relative">
+                        <img
+                          src={member.avatar || '/default-avatar.png'}
+                          alt={member.name}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                        <span
+                          className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white ${
+                            onlineUsers.has(member.id) ? 'bg-green-500' : 'bg-gray-400'
+                          }`}
+                        ></span>
+                      </div>
+                      <div>
+                        <p className="font-semibold flex items-center gap-1">
+                          {member.name}
+                          {member.role === 'admin' && (
+                            <span className="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">مشرف</span>
+                          )}
+                        </p>
+                        <p className="text-sm text-gray-500">{member.role !== 'admin' ? member.role : ''}</p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
           </div>
         </div>
       </main>

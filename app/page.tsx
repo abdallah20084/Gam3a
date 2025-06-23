@@ -318,7 +318,7 @@ export default function HomePage() {
                             </Button>
                           )}
                           {/* New Delete Button */}
-                          {group.canEdit && ( // Only show delete if user can edit (admin or super admin)
+                          {group.canEdit && (
                             <Button
                               variant="ghost"
                               className="w-full justify-start text-sm text-red-700 hover:bg-red-50"

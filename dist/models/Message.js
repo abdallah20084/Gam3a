@@ -52,6 +52,17 @@ const MessageSchema = new mongoose_1.Schema({
         required: true,
         trim: true, // إزالة المسافات البيضاء الزائدة
     },
+    type: {
+        type: String,
+        enum: ['text', 'image', 'video', 'audio', 'file'],
+        default: 'text',
+    },
+    attachments: [{
+            url: String,
+            name: String,
+            size: Number,
+            type: String,
+        }],
     timestamp: {
         type: Date,
         default: Date.now,

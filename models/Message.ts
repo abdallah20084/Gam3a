@@ -1,5 +1,5 @@
 // models/Message.ts
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 
 // تعريف واجهة الرسالة
 export interface IMessage extends Document {
@@ -13,12 +13,12 @@ export interface IMessage extends Document {
 // تعريف Schema للرسالة
 const MessageSchema: Schema = new Schema({
   group: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'Group', // يشير إلى نموذج Group
     required: true,
   },
   sender: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'User', // يشير إلى نموذج User
     required: true,
   },
@@ -34,4 +34,5 @@ const MessageSchema: Schema = new Schema({
 });
 
 // تصدير النموذج
-export default mongoose.models.Message || mongoose.model<IMessage>('Message', MessageSchema);
+const Message: Model<IMessage> = mongoose.models.Message || mongoose.model<IMessage>('Message', MessageSchema);
+export default Message;

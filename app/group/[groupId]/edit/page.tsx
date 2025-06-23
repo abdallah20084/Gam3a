@@ -7,7 +7,7 @@ import Navbar from '@/components/Navbar';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import axios from 'axios';
-import DOMPurify from 'dompurify'; // <--- استيراد DOMPurify
+import DOMPurify from 'dompurify';
 
 interface GroupDetails {
   id: string;
@@ -32,7 +32,7 @@ export default function EditGroupPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
-  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false); // Add this state
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
 
   const fetchGroupDetails = useCallback(async () => {
     setLoading(true);
@@ -40,11 +40,11 @@ export default function EditGroupPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        setIsUserLoggedIn(false); // Update login status
+        setIsUserLoggedIn(false);
         router.push('/auth/login');
         return;
       }
-      setIsUserLoggedIn(true); // User is logged in
+      setIsUserLoggedIn(true);
 
       const response = await axios.get(`/api/groups/${groupId}`, {
         headers: {
@@ -57,23 +57,22 @@ export default function EditGroupPage() {
         const fetchedGroup: GroupDetails = response.data.group;
         if (!fetchedGroup.canEdit) {
           setError('ليس لديك صلاحية لتعديل هذه المجموعة.');
-          router.push('/'); 
+          router.push('/');
           return;
         }
         setGroup(fetchedGroup);
-        // <--- FIX: Sanitize fetched data before populating form fields
         setName(DOMPurify.sanitize(fetchedGroup.name));
         setDescription(DOMPurify.sanitize(fetchedGroup.description || ''));
       } else {
         setError(response.data.error || 'فشل في جلب تفاصيل المجموعة.');
-        router.push('/'); 
+        router.push('/');
       }
     } catch (err: any) {
       console.error('Error fetching group details for edit:', err);
       if (axios.isAxiosError(err) && err.response) {
         if (err.response.status === 401 || err.response.status === 403) {
           setError('الرجاء تسجيل الدخول أو ليس لديك صلاحية.');
-          setIsUserLoggedIn(false); // Update login status
+          setIsUserLoggedIn(false);
           router.push('/auth/login');
         } else if (err.response.status === 404) {
           setError('المجموعة غير موجودة.');
@@ -110,7 +109,6 @@ export default function EditGroupPage() {
     }
 
     try {
-      // <--- FIX: Sanitize name and description before sending to API
       const sanitizedName = DOMPurify.sanitize(name.trim());
       const sanitizedDescription = DOMPurify.sanitize(description.trim());
 
@@ -145,7 +143,7 @@ export default function EditGroupPage() {
     }
   };
 
-  if (loading || !isUserLoggedIn) { // Check both loading and login status
+  if (loading || !isUserLoggedIn) {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <LoadingSpinner />
@@ -153,7 +151,7 @@ export default function EditGroupPage() {
     );
   }
 
-  if (error && !group) { 
+  if (error && !group) {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
@@ -170,7 +168,7 @@ export default function EditGroupPage() {
     );
   }
 
-  if (!group) { 
+  if (!group) {
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
@@ -180,7 +178,6 @@ export default function EditGroupPage() {
       </div>
     );
   }
-
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">

@@ -1,13 +1,13 @@
 // components/LoadingSpinner.tsx
 import React from 'react';
 
-const LoadingSpinner: React.FC = () => {
-  return (
-    <div className="flex justify-center items-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      <p className="ml-3 text-lg text-gray-700">جاري التحميل...</p>
+const LoadingSpinner: React.FC = () => (
+  <div className="d-flex justify-content-center align-items-center my-4">
+    <div className="spinner-border text-primary" style={{ width: 48, height: 48 }} role="status">
+      <span className="visually-hidden">جاري التحميل...</span>
     </div>
-  );
-};
+    <span className="ms-3 fs-5 text-secondary">جاري التحميل...</span>
+  </div>
+);
 
 export default LoadingSpinner;
