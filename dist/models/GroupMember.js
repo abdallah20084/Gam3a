@@ -38,6 +38,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const GroupMemberSchema = new mongoose_1.Schema({
     group: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Group', required: true },
     user: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+    role: { type: String, enum: ['admin', 'member'], default: 'member' },
     joinedAt: { type: Date, default: Date.now }
 });
 const GroupMember = mongoose_1.default.models.GroupMember || mongoose_1.default.model('GroupMember', GroupMemberSchema);

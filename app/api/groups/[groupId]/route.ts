@@ -1,7 +1,3 @@
-// app/api/groups/[groupId]/route.ts
-// تم تعديل دالة DELETE لإزالة منطق المعاملات (transactions)
-// لتناسب بيئات MongoDB التي لا تعمل كـ Replica Set.
-
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Group from '@/models/Group';
@@ -10,91 +6,119 @@ import Message from '@/models/Message';
 import User, { IUser } from '@/models/User';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+import { IGroupMember } from '@/models/GroupMember';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+// Define a type for the populated user in lean query results
+type PopulatedUser = {
+  _id: mongoose.Types.ObjectId | string;
+  name: string;
+  avatar?: string;
+};
 
-// Helper to get user ID and super admin status from token
-const getAuthDetailsFromToken = (token: string) => {
+// Define a type for the member document with populated user
+type MemberWithPopulatedUser = {
+  _id: mongoose.Types.ObjectId | string;
+  user: PopulatedUser;
+  role: string;
+  joinedAt: Date;
+  group: mongoose.Types.ObjectId | string;
+};
+
+// Be explicit about the route's dynamic nature, which is a good practice in Next.js.
+export const dynamic = 'force-dynamic';
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is not set.');
+}
+
+// تحسين تعريف الأنواع
+type DecodedToken = {
+  id?: string;
+  userId?: string;
+  isSuperAdmin?: boolean;
+};
+
+// A more robust function to extract authentication details from a JWT.
+const getAuthDetailsFromToken = (token: string | undefined) => {
   try {
-    const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string; isSuperAdmin?: boolean };
-    const userId = String(decodedToken.id || decodedToken.userId);
-    const isSuperAdmin = decodedToken.isSuperAdmin || false;
-    return { userId: new mongoose.Types.ObjectId(userId), isSuperAdmin };
+    if (!token) {
+      return { userId: null, isSuperAdmin: false };
+    }
+    const decodedToken = jwt.verify(token, JWT_SECRET) as DecodedToken;
+    const userIdStr = String(decodedToken.id || decodedToken.userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userIdStr)) {
+      console.warn('Invalid ObjectId in token:', userIdStr);
+      return { userId: null, isSuperAdmin: false };
+    }
+
+    return { 
+      userId: new mongoose.Types.ObjectId(userIdStr), 
+      isSuperAdmin: decodedToken.isSuperAdmin || false 
+    };
   } catch (error) {
-    console.error('Invalid token:', error);
+    // Catches JWT errors (expired, malformed, etc.)
+    console.warn('Token verification failed:', error instanceof Error ? error.message : error);
     return { userId: null, isSuperAdmin: false };
   }
 };
 
-// GET method to fetch single group details
-export async function GET(request: NextRequest, { params }: { params: { groupId: string } }) {
+// Centralized function to get user's authentication and authorization status for a group.
+async function getAuthStatus(request: NextRequest, groupId?: string) {
+  const authHeader = request.headers.get('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : undefined;
+  const { userId, isSuperAdmin } = getAuthDetailsFromToken(token);
+
+  if (!userId) {
+    return { userId: null, isSuperAdmin: false, isMember: false, isAdmin: false, role: 'guest' };
+  }
+
+  const memberInfo = (groupId && mongoose.Types.ObjectId.isValid(groupId))
+    ? await GroupMember.findOne({ group: groupId, user: userId }).lean()
+    : null;
+
+  return { userId, isSuperAdmin, isMember: !!memberInfo, isAdmin: memberInfo?.role === 'admin', role: memberInfo?.role || 'guest' };
+}
+
+// تحسين دالة GET
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { groupId: string } }
+): Promise<NextResponse> {
   await connectDB();
 
   try {
     const { groupId } = params;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return NextResponse.json({ success: false, error: 'معرف مجموعة غير صالح.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'معرف مجموعة غير صالح.' },
+        { status: 400 }
+      );
     }
 
-    let userId: mongoose.Types.ObjectId | null = null;
-    let isMember: boolean = false;
-    let isAdmin: boolean = false;
-    let isSuperAdminOfAnyGroup: boolean = false;
-    let currentUserRole: string = 'guest';
-
-    const authHeader = request.headers.get('Authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      try {
-        const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string; isSuperAdmin?: boolean };
-        userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
-        isSuperAdminOfAnyGroup = decodedToken.isSuperAdmin || false; 
-        
-        const memberInfo = await GroupMember.findOne({ group: groupId, user: userId });
-        if (memberInfo) {
-          const role = (memberInfo as any).role;
-          isMember = true;
-          currentUserRole = role;
-          if (role === 'admin') {
-            isAdmin = true;
-          }
-        }
-      } catch (jwtError: any) {
-        console.warn('Invalid or expired token during group details fetch. Treating as guest.');
-      }
-    }
+    const auth = await getAuthStatus(request, groupId);
 
     const group = await Group.findById(groupId).lean();
-
     if (!group) {
-      return NextResponse.json({ success: false, error: 'المجموعة غير موجودة.' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'المجموعة غير موجودة.' },
+        { status: 404 }
+      );
     }
 
-    const canEdit = isAdmin || isSuperAdminOfAnyGroup;
-
-    type PopulatedGroupMemberUser = IUser & { _id: mongoose.Types.ObjectId };
-    type PopulatedGroupMemberDoc = Omit<mongoose.Document & { user: PopulatedGroupMemberUser; role: string; joinedAt: Date; }, 'user'> & {
-      user: PopulatedGroupMemberUser;
-      role: string;
-      joinedAt: Date;
-      _id: mongoose.Types.ObjectId;
-      __v?: number;
-    };
-
-    // ترتيب الأعضاء: الأدمن أولاً
-    const members = (await GroupMember.find({ group: groupId })
-      .populate<{ user: PopulatedGroupMemberUser; }>({
-        path: 'user',
-        select: 'name avatar',
-        model: User
-      })
+    const members = await GroupMember.find({ group: groupId })
+      .populate('user', 'name avatar')
       .select('user role joinedAt')
-      .lean()) as unknown as PopulatedGroupMemberDoc[];
+      .lean();
+    
+    // Type assertion for the populated members
+    const populatedMembers = members as unknown as MemberWithPopulatedUser[];
 
-    const membersList = members
+    const membersList = populatedMembers
       .sort((a, b) => (a.role === 'admin' ? -1 : 1))
-      .map((member: PopulatedGroupMemberDoc) => ({
+      .map(member => ({
         id: member.user._id.toString(),
         name: member.user.name,
         avatar: member.user.avatar || null,
@@ -112,124 +136,169 @@ export async function GET(request: NextRequest, { params }: { params: { groupId:
         adminId: group.admin,
         memberCount: group.memberCount,
         createdAt: group.createdAt,
-        currentUserRole: currentUserRole,
-        isMember: isMember,
-        isAdmin: isAdmin,
-        canEdit: canEdit,
+        currentUserRole: auth.role,
+        isMember: auth.isMember,
+        isAdmin: auth.isAdmin,
+        canEdit: auth.isAdmin || auth.isSuperAdmin,
         members: membersList,
       },
-    }, { status: 200 });
+    });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching group details:', error);
-    return NextResponse.json({ success: false, error: error.message || 'خطأ داخلي في الخادم.' }, { status: 500 });
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'خطأ داخلي في الخادم.' 
+      },
+      { status: 500 }
+    );
   }
 }
 
-// PUT method to update group details
-export async function PUT(request: NextRequest, { params }: { params: { groupId: string } }) {
+// تحسين دالة PUT
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { groupId: string } }
+): Promise<NextResponse> {
   await connectDB();
 
   try {
     const { groupId } = params;
-    const { name, description, coverImageUrl } = await request.json(); 
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return NextResponse.json({ success: false, error: 'معرف مجموعة غير صالح.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'معرف مجموعة غير صالح.' },
+        { status: 400 }
+      );
     }
 
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.split(' ')[1];
-    const { userId, isSuperAdmin } = getAuthDetailsFromToken(token || '');
-
-    if (!userId) {
-      return NextResponse.json({ success: false, error: 'غير مصرح لك. الرجاء تسجيل الدخول.', redirectToLogin: true }, { status: 401 });
+    const auth = await getAuthStatus(request);
+    if (!auth.userId) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'غير مصرح لك. الرجاء تسجيل الدخول.',
+          redirectToLogin: true 
+        },
+        { status: 401 }
+      );
     }
 
     const group = await Group.findById(groupId);
-
     if (!group) {
-      return NextResponse.json({ success: false, error: 'المجموعة غير موجودة.' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'المجموعة غير موجودة.' },
+        { status: 404 }
+      );
     }
 
-    if (!group.admin.equals(userId) && !isSuperAdmin) {
-      return NextResponse.json({ success: false, error: 'ليس لديك صلاحية لتعديل هذه المجموعة.' }, { status: 403 });
+    if (!group.admin.equals(auth.userId) && !auth.isSuperAdmin) {
+      return NextResponse.json(
+        { success: false, error: 'ليس لديك صلاحية لتعديل هذه المجموعة.' },
+        { status: 403 }
+      );
     }
 
-    if (name !== undefined) {
-      group.name = name.trim();
-    }
-    if (description !== undefined) {
-      group.description = description.trim();
-    }
+    const body = await request.json();
+    const { name, description } = body;
+    if (name) group.name = name.trim();
+    if (description) group.description = description.trim();
 
     await group.save();
 
-    return NextResponse.json({ success: true, message: 'تم تحديث المجموعة بنجاح.', group: group }, { status: 200 });
+    return NextResponse.json({
+      success: true,
+      message: 'تم تحديث المجموعة بنجاح.',
+      group
+    });
 
   } catch (error: any) {
     console.error('Error updating group:', error);
     if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map((val: any) => val.message);
-      return NextResponse.json({ success: false, error: messages.join(', ') }, { status: 400 });
+      const messages = Object.values(error.errors)
+        .map((err: any) => err.message)
+        .join(', ');
+      return NextResponse.json(
+        { success: false, error: messages },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ success: false, error: error.message || 'خطأ داخلي في الخادم.' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: 'خطأ داخلي في الخادم.' },
+      { status: 500 }
+    );
   }
 }
 
-// DELETE method to delete a group
-export async function DELETE(request: NextRequest, { params }: { params: { groupId: string } }) {
+// تحسين دالة DELETE
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { groupId: string } }
+): Promise<NextResponse> {
   await connectDB();
+  const session = await mongoose.startSession();
 
   try {
     const { groupId } = params;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return NextResponse.json({ success: false, error: 'معرف مجموعة غير صالح.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'معرف مجموعة غير صالح.' },
+        { status: 400 }
+      );
     }
 
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.split(' ')[1];
-    const { userId, isSuperAdmin } = getAuthDetailsFromToken(token || '');
-
-    if (!userId) {
-      return NextResponse.json({ success: false, error: 'غير مصرح لك. الرجاء تسجيل الدخول.', redirectToLogin: true }, { status: 401 });
+    const auth = await getAuthStatus(request);
+    if (!auth.userId) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'غير مصرح لك. الرجاء تسجيل الدخول.',
+          redirectToLogin: true 
+        },
+        { status: 401 }
+      );
     }
 
     const group = await Group.findById(groupId);
-
     if (!group) {
-      return NextResponse.json({ success: false, error: 'المجموعة غير موجودة بالفعل.' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'المجموعة غير موجودة.' },
+        { status: 404 }
+      );
     }
 
-    if (!group.admin.equals(userId) && !isSuperAdmin) {
-      return NextResponse.json({ success: false, error: 'ليس لديك صلاحية لحذف هذه المجموعة.' }, { status: 403 });
+    if (!group.admin.equals(auth.userId) && !auth.isSuperAdmin) {
+      return NextResponse.json(
+        { success: false, error: 'ليس لديك صلاحية لحذف هذه المجموعة.' },
+        { status: 403 }
+      );
     }
 
-    // --- START: Removed Transaction Logic ---
-    // Instead of transactions, perform operations sequentially.
-    // If one fails, the others might still be attempted or might throw errors.
+    // استخدام معاملة لضمان حذف كل البيانات المرتبطة بشكل آمن
+    await session.withTransaction(async () => {
+      await GroupMember.deleteMany({ group: groupId }, { session });
+      await Message.deleteMany({ group: groupId }, { session });
+      await Group.findByIdAndDelete(groupId, { session });
+    });
 
-    // 1. Delete all members of this group
-    await GroupMember.deleteMany({ group: groupId });
-    // 2. Delete all messages related to this group
-    await (Message as mongoose.Model<any>).deleteMany({ group: groupId });
-    // 3. Delete the group itself
-    const deletedGroup = await Group.findByIdAndDelete(groupId);
-    if (!deletedGroup) {
-      return NextResponse.json({ success: false, error: 'المجموعة غير موجودة.' }, { status: 404 });
-    }
-
-    // --- END: Removed Transaction Logic ---
-
-    return NextResponse.json({ success: true, message: 'تم حذف المجموعة بنجاح.' }, { status: 200 });
+    return NextResponse.json({
+      success: true,
+      message: 'تم حذف المجموعة بنجاح.'
+    });
 
   } catch (error: any) {
     console.error('Error deleting group:', error);
-    // Specific check for Mongoose/MongoDB errors if needed
-    if (error.name === 'CastError') {
-      return NextResponse.json({ success: false, error: 'صيغة معرف المجموعة غير صحيحة.' }, { status: 400 });
-    }
-    return NextResponse.json({ success: false, error: error.message || 'خطأ داخلي في الخادم.' }, { status: 500 });
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'فشل حذف المجموعة. ' + (error.message || 'خطأ داخلي في الخادم.')
+      },
+      { status: 500 }
+    );
+  } finally {
+    // التأكد من إغلاق الجلسة دائمًا
+    await session.endSession();
   }
 }

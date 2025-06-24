@@ -1,4 +1,3 @@
-// app/api/groups/route.ts - POST request
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import connectDB from '@/lib/db';

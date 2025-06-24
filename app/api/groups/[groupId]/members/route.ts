@@ -1,8 +1,9 @@
 // app/api/groups/[groupId]/members/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import type { AppRouteHandlerFnContext } from 'next/dist/server/future/route-modules/app-route/module';
 import connectDB from '@/lib/db';
 import GroupMember from '@/models/GroupMember';
-import Group from '@/models/Group'; 
+import Group from '@/models/Group';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 
@@ -21,10 +22,9 @@ const getUserIdFromToken = (token: string) => {
   }
 };
 
-// ✅ استخدم التوقيع الرسمي المتوافق مع Next.js 15
 export async function POST(
   req: NextRequest,
-  context: { params: { groupId: string } }
+  context: AppRouteHandlerFnContext<{ groupId: string }>
 ) {
   await connectDB();
   const { groupId } = context.params;
@@ -58,14 +58,13 @@ export async function POST(
     });
     await newMember.save();
 
-    // Increment memberCount in the Group model
     group.memberCount = (group.memberCount || 0) + 1;
     await group.save();
 
     return NextResponse.json({ message: 'تم الانضمام إلى المجموعة بنجاح.' }, { status: 201 });
   } catch (error: any) {
     console.error('Error joining group:', error);
-    if (error.code === 11000) { 
+    if (error.code === 11000) {
       return NextResponse.json({ error: 'أنت بالفعل عضو في هذه المجموعة.' }, { status: 409 });
     }
     return NextResponse.json({ error: 'فشل الانضمام إلى المجموعة.' }, { status: 500 });
@@ -74,7 +73,7 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  context: { params: { groupId: string } }
+  context: AppRouteHandlerFnContext<{ groupId: string }>
 ) {
   await connectDB();
   const { groupId } = context.params;
@@ -102,7 +101,6 @@ export async function DELETE(
       return NextResponse.json({ message: 'أنت لست عضواً في هذه المجموعة.' }, { status: 200 });
     }
 
-    // Decrement memberCount in the Group model
     group.memberCount = Math.max(0, (group.memberCount || 0) - 1);
     await group.save();
 
