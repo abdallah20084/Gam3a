@@ -7,9 +7,6 @@ import Navbar from '@/components/Navbar';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import { io, Socket } from 'socket.io-client';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Button } from '@/components/ui/button';
-import { MoreHorizontal } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
 const SOCKET_SERVER_URL = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:3000';
@@ -495,6 +492,45 @@ export default function GroupChatPage() {
                                 style={{ width: 32, height: 32 }}
                               />
                               <span className="fw-semibold text-dark">{displaySenderName}</span>
+                              {/* Dropdown Bootstrap للخيارات */}
+                              {(msg.sender === currentUserId || isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
+                                <div className="dropdown ms-auto">
+                                  <button
+                                    className="btn btn-sm btn-link text-dark p-0 ms-2"
+                                    type="button"
+                                    id={`msgDropdown-${msg.id}`}
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false"
+                                    style={{ boxShadow: 'none' }}
+                                  >
+                                    <i className="bi bi-three-dots-vertical fs-5"></i>
+                                  </button>
+                                  <ul className="dropdown-menu dropdown-menu-end text-end" aria-labelledby={`msgDropdown-${msg.id}`}>
+                                    {/* تعديل فقط لصاحب الرسالة */}
+                                    {msg.sender === currentUserId && (
+                                      <li>
+                                        <button
+                                          className="dropdown-item"
+                                          onClick={() => startEditing(msg)}
+                                        >
+                                          تعديل
+                                        </button>
+                                      </li>
+                                    )}
+                                    {/* حذف فقط للإدمن أو السوبر أدمن */}
+                                    {(isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
+                                      <li>
+                                        <button
+                                          className="dropdown-item text-danger"
+                                          onClick={() => handleDeleteMessage(msg.id)}
+                                        >
+                                          حذف
+                                        </button>
+                                      </li>
+                                    )}
+                                  </ul>
+                                </div>
+                              )}
                             </div>
                             {editingMessageId === msg.id ? (
                               <div>
@@ -520,38 +556,6 @@ export default function GroupChatPage() {
                               {new Date(msg.timestamp).toLocaleTimeString()}
                               {msg.isEdited && <span className="ms-2 text-primary">(مُعدلة)</span>}
                             </div>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="position-absolute top-0 end-0 opacity-0 group-hover:opacity-100"
-                                  style={{ transition: 'opacity 0.2s' }}
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-1 d-flex flex-column gap-1">
-                                {msg.sender === currentUserId && (
-                                  <Button
-                                    variant="ghost"
-                                    className="w-100 text-end"
-                                    onClick={() => startEditing(msg)}
-                                  >
-                                    تعديل
-                                  </Button>
-                                )}
-                                {(isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
-                                  <Button
-                                    variant="ghost"
-                                    className="w-100 text-end text-danger"
-                                    onClick={() => handleDeleteMessage(msg.id)}
-                                  >
-                                    حذف
-                                  </Button>
-                                )}
-                              </PopoverContent>
-                            </Popover>
                           </>
                         ) : (
                           <div className="fst-italic small" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }}></div>
