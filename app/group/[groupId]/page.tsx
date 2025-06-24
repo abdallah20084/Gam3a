@@ -517,8 +517,8 @@ export default function GroupChatPage() {
                                         </button>
                                       </li>
                                     )}
-                                    {/* حذف فقط للإدمن أو السوبر أدمن */}
-                                    {(isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
+                                    {/* حذف لصاحب الرسالة أو الأدمن أو السوبر أدمن */}
+                                    {(msg.sender === currentUserId || isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
                                       <li>
                                         <button
                                           className="dropdown-item text-danger"
