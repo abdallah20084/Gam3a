@@ -21,12 +21,13 @@ const getUserIdFromToken = (token: string) => {
   }
 };
 
+// ✅ استخدم التوقيع الرسمي المتوافق مع Next.js 15
 export async function POST(
   req: NextRequest,
-  { params }: { params: { groupId: string } }
+  context: { params: { groupId: string } }
 ) {
   await connectDB();
-  const { groupId } = params;
+  const { groupId } = context.params;
 
   if (!mongoose.Types.ObjectId.isValid(groupId)) {
     return NextResponse.json({ error: 'معرف مجموعة غير صالح.' }, { status: 400 });
@@ -73,10 +74,10 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { groupId: string } }
+  context: { params: { groupId: string } }
 ) {
   await connectDB();
-  const { groupId } = params;
+  const { groupId } = context.params;
 
   if (!mongoose.Types.ObjectId.isValid(groupId)) {
     return NextResponse.json({ error: 'معرف مجموعة غير صالح.' }, { status: 400 });
