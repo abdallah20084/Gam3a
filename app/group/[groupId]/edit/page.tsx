@@ -145,7 +145,7 @@ export default function EditGroupPage() {
 
   if (loading || !isUserLoggedIn) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="d-flex justify-content-center align-items-center min-vh-100">
         <LoadingSpinner />
       </div>
     );
@@ -153,13 +153,13 @@ export default function EditGroupPage() {
 
   if (error && !group) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-vh-100 d-flex flex-column">
         <Navbar />
-        <main className="flex-1 p-6 container mx-auto">
+        <main className="flex-grow-1 py-5 container">
           <ErrorMessage message={error} />
           <button
             onClick={() => router.push('/')}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="btn btn-primary mt-4"
           >
             العودة إلى المجموعات
           </button>
@@ -170,73 +170,81 @@ export default function EditGroupPage() {
 
   if (!group) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-vh-100 d-flex flex-column">
         <Navbar />
-        <main className="flex-1 p-6 container mx-auto">
-          <p className="text-center text-red-600 text-lg">المجموعة غير متوفرة أو حدث خطأ أثناء تحميلها.</p>
+        <main className="flex-grow-1 py-5 container">
+          <p className="text-center text-danger fs-5">المجموعة غير متوفرة أو حدث خطأ أثناء تحميلها.</p>
         </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-vh-100 bg-light d-flex flex-column">
       <Navbar />
-      <main className="flex-1 container mx-auto px-4 py-8 mt-16">
-        <div className="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-lg">
-          <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">تعديل المجموعة: {group.name}</h1>
+      <main className="flex-grow-1 container py-5">
+        <div className="row justify-content-center">
+          <div className="col-12 col-md-10 col-lg-8">
+            <div className="card shadow-sm p-4">
+              <h1 className="h3 fw-bold text-center mb-4 text-primary">تعديل المجموعة: {group.name}</h1>
 
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative mb-6" role="alert">
-              <span className="block sm:inline">{error}</span>
+              {error && (
+                <div className="alert alert-danger" role="alert">
+                  {error}
+                </div>
+              )}
+
+              {saveSuccess && (
+                <div className="alert alert-success" role="alert">
+                  {saveSuccess}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit}>
+                <div className="mb-3">
+                  <label htmlFor="name" className="form-label fw-semibold">اسم المجموعة</label>
+                  <input
+                    type="text"
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="form-control"
+                    disabled={isSaving}
+                  />
+                </div>
+
+                <div className="mb-3">
+                  <label htmlFor="description" className="form-label fw-semibold">الوصف (اختياري)</label>
+                  <textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={4}
+                    className="form-control"
+                    disabled={isSaving}
+                  ></textarea>
+                </div>
+
+                <div className="d-grid gap-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="btn btn-primary fw-bold"
+                  >
+                    {isSaving ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/group/${groupId}`)}
+                    className="btn btn-secondary fw-bold"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </form>
             </div>
-          )}
-
-          {saveSuccess && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg relative mb-6" role="alert">
-              <span className="block sm:inline">{saveSuccess}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="name" className="block text-lg font-medium text-gray-700 mb-2">اسم المجموعة</label>
-              <input
-                type="text"
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="description" className="block text-lg font-medium text-gray-700 mb-2">الوصف (اختياري)</label>
-              <textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                className="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-lg"
-              ></textarea>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-md shadow-lg transition duration-300 focus:outline-none focus:ring-4 focus:ring-blue-300 text-xl disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {isSaving ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
-            </button>
-            <button
-              type="button"
-              onClick={() => router.push(`/group/${groupId}`)}
-              className="w-full mt-4 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 px-6 rounded-md shadow-lg transition duration-300 focus:outline-none focus:ring-4 focus:ring-gray-300 text-xl"
-            >
-              إلغاء
-            </button>
-          </form>
+          </div>
         </div>
       </main>
     </div>

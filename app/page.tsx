@@ -354,15 +354,35 @@ export default function HomePage() {
               <nav className="d-flex justify-content-center mt-4">
                 <ul className="pagination">
                   <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                    <button className="page-link" onClick={() => handlePageChange(currentPage - 1)}>السابق</button>
+                    <button
+                      className="page-link"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      tabIndex={currentPage === 1 ? -1 : 0}
+                      aria-disabled={currentPage === 1}
+                    >
+                      السابق
+                    </button>
                   </li>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                      <button className="page-link" onClick={() => handlePageChange(page)}>{page}</button>
+                      <button
+                        className="page-link"
+                        onClick={() => handlePageChange(page)}
+                        aria-current={currentPage === page ? 'page' : undefined}
+                      >
+                        {page}
+                      </button>
                     </li>
                   ))}
                   <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                    <button className="page-link" onClick={() => handlePageChange(currentPage + 1)}>التالي</button>
+                    <button
+                      className="page-link"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      tabIndex={currentPage === totalPages ? -1 : 0}
+                      aria-disabled={currentPage === totalPages}
+                    >
+                      التالي
+                    </button>
                   </li>
                 </ul>
               </nav>

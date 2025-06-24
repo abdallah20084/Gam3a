@@ -1,3 +1,5 @@
-export function cn(...args: any[]) {
-  return args.filter(Boolean).join(' ');
+import clsx, { type ClassValue } from "clsx";
+
+export function cn(...inputs: ClassValue[]) {
+  return clsx(...inputs);
 }

@@ -394,7 +394,7 @@ export default function GroupChatPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="d-flex justify-content-center align-items-center min-vh-100">
         <LoadingSpinner />
       </div>
     );
@@ -402,14 +402,14 @@ export default function GroupChatPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-vh-100 d-flex flex-column">
         <Navbar />
-        <main className="flex-1 p-6 container mx-auto">
+        <main className="flex-grow-1 py-5 container">
           <ErrorMessage message={error} />
           {error.includes('الرجاء تسجيل الدخول') && (
             <button
               onClick={() => router.push('/auth/login')}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="btn btn-primary mt-4"
             >
               تسجيل الدخول
             </button>
@@ -417,7 +417,7 @@ export default function GroupChatPage() {
           {error.includes('غير مصرح لك بالانضمام') || error.includes('المجموعة غير موجودة') ? (
             <button
               onClick={() => router.push('/')}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="btn btn-primary mt-4"
             >
               العودة إلى استكشاف المجموعات
             </button>
@@ -425,7 +425,7 @@ export default function GroupChatPage() {
             !error.includes('الرجاء تسجيل الدخول') && (
               <button
                 onClick={() => fetchGroupDetails()}
-                className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 mr-2"
+                className="btn btn-success mt-4"
               >
                 إعادة المحاولة
               </button>
@@ -438,36 +438,36 @@ export default function GroupChatPage() {
 
   if (!group) {
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="min-vh-100 d-flex flex-column">
         <Navbar />
-        <main className="flex-1 p-6 container mx-auto">
-          <p className="text-center text-red-600 text-lg">المجموعة غير متوفرة أو حدث خطأ أثناء تحميلها.</p>
+        <main className="flex-grow-1 py-5 container">
+          <p className="text-center text-danger fs-5">المجموعة غير متوفرة أو حدث خطأ أثناء تحميلها.</p>
         </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="min-vh-100 bg-light d-flex flex-column">
       <Navbar />
       <main className="container-fluid py-3">
         <div className="row">
           <div className="col-12 col-lg-9 mb-3">
             {/* منطقة الدردشة */}
-            <div className="flex-1 bg-white rounded-lg shadow-md p-6 mr-4 flex flex-col">
-              <h1 className="text-3xl font-bold mb-4">{group.name}</h1>
-              <p className="text-gray-600 mb-4">{group.memberCount} أعضاء</p>
-              <div className="flex border-b border-gray-200 mb-4">
-                <button className="py-2 px-4 text-blue-600 border-b-2 border-blue-600 font-semibold">الدردشة</button>
-                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">الفيديوهات</button>
-                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">الصور</button>
-                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">PDFs</button>
-                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">تسجيلات صوتية</button>
-                <button className="py-2 px-4 text-gray-600 hover:text-gray-800">روابط</button>
+            <div className="bg-white rounded-3 shadow-sm p-4 h-100 d-flex flex-column">
+              <h1 className="fs-2 fw-bold mb-2">{group.name}</h1>
+              <p className="text-secondary mb-3">{group.memberCount} أعضاء</p>
+              <div className="border-bottom mb-3 d-flex gap-2">
+                <button className="btn btn-link border-0 border-bottom border-2 border-primary text-primary fw-bold rounded-0">الدردشة</button>
+                <button className="btn btn-link border-0 text-secondary">الفيديوهات</button>
+                <button className="btn btn-link border-0 text-secondary">الصور</button>
+                <button className="btn btn-link border-0 text-secondary">PDFs</button>
+                <button className="btn btn-link border-0 text-secondary">تسجيلات صوتية</button>
+                <button className="btn btn-link border-0 text-secondary">روابط</button>
               </div>
-              <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50 mb-4 flex flex-col" style={{ minHeight: '300px' }}>
+              <div className="flex-grow-1 overflow-auto border rounded-3 p-3 bg-light mb-3 d-flex flex-column" style={{ minHeight: 300 }}>
                 {messages.length === 0 && !loading ? (
-                  <p className="text-center text-gray-500">لا توجد رسائل بعد. ابدأ الدردشة!</p>
+                  <p className="text-center text-muted">لا توجد رسائل بعد. ابدأ الدردشة!</p>
                 ) : (
                   messages.map((msg) => {
                     const senderInfo = group?.members.find(member => member.id === msg.sender);
@@ -477,79 +477,85 @@ export default function GroupChatPage() {
                     return (
                       <div
                         key={msg.id}
-                        className={`mb-2 p-3 rounded-lg max-w-[70%] relative group ${
-                          msg.sender === currentUserId ? 'bg-blue-200 self-end' : 'bg-gray-200 self-start'
-                        } ${isSystemMessage ? 'bg-yellow-100 text-yellow-800 self-center text-center max-w-[90%]' : ''}`}
+                        className={`mb-2 p-3 rounded-3 position-relative ${isSystemMessage
+                          ? 'bg-warning-subtle text-warning-emphasis text-center mx-auto'
+                          : msg.sender === currentUserId
+                            ? 'bg-primary-subtle ms-auto'
+                            : 'bg-secondary-subtle me-auto'
+                        }`}
+                        style={{ maxWidth: isSystemMessage ? '90%' : '70%' }}
                       >
-                          {!isSystemMessage ? (
-                              <>
-                                  <div className="flex items-center mb-1">
-                                      <img
-                                      src={displaySenderAvatar}
-                                      alt={displaySenderName}
-                                      className="w-8 h-8 rounded-full object-cover mr-2"
-                                      />
-                                      <p className="font-semibold text-gray-800">{displaySenderName}</p>
-                                  </div>
-                                  {editingMessageId === msg.id ? (
-                                      <div className="flex flex-col">
-                                          <input
-                                              type="text"
-                                              value={editingContent}
-                                              onChange={(e) => setEditingContent(e.target.value)}
-                                              className="border rounded px-2 py-1 mb-2 w-full text-gray-700"
-                                      />
-                                      <div className="flex justify-end space-x-2 rtl:space-x-reverse">
-                                          <button onClick={submitEdit} className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
-                                              حفظ
-                                          </button>
-                                          <button onClick={cancelEdit} className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">
-                                              إلغاء
-                                          </button>
-                                      </div>
-                                  </div>
-                                  ) : (
-                                      <p className="text-gray-700" dangerouslySetInnerHTML={{ __html: msg.content }}></p>
-                                  )}
-                                  <p className="text-xs text-gray-500 mt-1 text-right">
-                                      {new Date(msg.timestamp).toLocaleTimeString()}
-                                      {msg.isEdited && <span className="ml-2 text-blue-500">(مُعدلة)</span>}
-                                  </p>
-                                  <Popover>
-                                      <PopoverTrigger asChild>
-                                          <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                          >
-                                              <MoreHorizontal className="h-4 w-4" />
-                                          </Button>
-                                      </PopoverTrigger>
-                                      <PopoverContent className="w-auto p-1 flex flex-col space-y-1">
-                                          {msg.sender === currentUserId && (
-                                              <Button
-                                                  variant="ghost"
-                                                  className="w-full justify-start text-sm"
-                                                  onClick={() => startEditing(msg)}
-                                              >
-                                                  تعديل
-                                              </Button>
-                                          )}
-                                          {(isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
-                                              <Button
-                                                  variant="ghost"
-                                                  className="w-full justify-start text-sm text-red-500 hover:text-red-600"
-                                                  onClick={() => handleDeleteMessage(msg.id)}
-                                              >
-                                                  حذف
-                                              </Button>
-                                          )}
-                                      </PopoverContent>
-                                  </Popover>
-                              </>
-                          ) : (
-                              <p className="text-sm italic" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }}></p>
-                          )}
+                        {!isSystemMessage ? (
+                          <>
+                            <div className="d-flex align-items-center mb-1">
+                              <img
+                                src={displaySenderAvatar}
+                                alt={displaySenderName}
+                                className="rounded-circle object-cover me-2"
+                                style={{ width: 32, height: 32 }}
+                              />
+                              <span className="fw-semibold text-dark">{displaySenderName}</span>
+                            </div>
+                            {editingMessageId === msg.id ? (
+                              <div>
+                                <input
+                                  type="text"
+                                  value={editingContent}
+                                  onChange={(e) => setEditingContent(e.target.value)}
+                                  className="form-control mb-2"
+                                />
+                                <div className="d-flex justify-content-end gap-2">
+                                  <button onClick={submitEdit} className="btn btn-success btn-sm">
+                                    حفظ
+                                  </button>
+                                  <button onClick={cancelEdit} className="btn btn-secondary btn-sm">
+                                    إلغاء
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-dark" dangerouslySetInnerHTML={{ __html: msg.content }}></div>
+                            )}
+                            <div className="text-end text-muted small mt-1">
+                              {new Date(msg.timestamp).toLocaleTimeString()}
+                              {msg.isEdited && <span className="ms-2 text-primary">(مُعدلة)</span>}
+                            </div>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="position-absolute top-0 end-0 opacity-0 group-hover:opacity-100"
+                                  style={{ transition: 'opacity 0.2s' }}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-1 d-flex flex-column gap-1">
+                                {msg.sender === currentUserId && (
+                                  <Button
+                                    variant="ghost"
+                                    className="w-100 text-end"
+                                    onClick={() => startEditing(msg)}
+                                  >
+                                    تعديل
+                                  </Button>
+                                )}
+                                {(isCurrentUserAdmin || isCurrentUserSuperAdmin) && (
+                                  <Button
+                                    variant="ghost"
+                                    className="w-100 text-end text-danger"
+                                    onClick={() => handleDeleteMessage(msg.id)}
+                                  >
+                                    حذف
+                                  </Button>
+                                )}
+                              </PopoverContent>
+                            </Popover>
+                          </>
+                        ) : (
+                          <div className="fst-italic small" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }}></div>
+                        )}
                       </div>
                     );
                   })
@@ -557,88 +563,92 @@ export default function GroupChatPage() {
                 <div ref={messagesEndRef} />
               </div>
               {typingUsers.size > 0 && (
-                <div className="text-gray-600 text-sm mb-2">
+                <div className="text-secondary small mb-2">
                   {Array.from(typingUsers)
                     .map(userId => group.members.find(m => m.id === userId)?.name || 'مستخدم غير معروف')
-                    .filter(Boolean) 
+                    .filter(Boolean)
                     .join(', ')}{' '}
                   يكتب...
                 </div>
               )}
-              <form onSubmit={handleSendMessage} className="flex items-center space-x-3">
+              <form onSubmit={handleSendMessage} className="d-flex align-items-center gap-2">
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => {
                     setNewMessage(e.target.value);
-                    handleTyping(e.target.value.length > 0); 
+                    handleTyping(e.target.value.length > 0);
                   }}
                   placeholder="اكتب رسالة..."
-                  className="flex-1 border rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="form-control rounded-pill"
                   disabled={!group.isMember || !isConnected}
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-700 transition-colors"
+                  className="btn btn-primary rounded-circle d-flex align-items-center justify-content-center"
                   disabled={!group.isMember || !isConnected || newMessage.trim() === ''}
+                  style={{ width: 44, height: 44 }}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                  </svg>
+                  <i className="bi bi-send fs-5"></i>
                 </button>
               </form>
               {!group.isMember && (
-                <p className="text-red-500 text-sm mt-2 text-center">يجب أن تكون عضواً في هذه المجموعة لإرسال الرسائل.</p>
+                <p className="text-danger small mt-2 text-center">يجب أن تكون عضواً في هذه المجموعة لإرسال الرسائل.</p>
               )}
               {!isConnected && (
-                <p className="text-orange-500 text-sm mt-2 text-center">جاري الاتصال بخادم الدردشة...</p>
+                <p className="text-warning small mt-2 text-center">جاري الاتصال بخادم الدردشة...</p>
               )}
             </div>
           </div>
           <div className="col-12 col-lg-3">
             {/* معلومات المجموعة */}
-            <div className="w-full bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-bold mb-4">معلومات المجموعة</h2>
+            <div className="bg-white rounded-3 shadow-sm p-4 mb-3">
+              <h2 className="fs-5 fw-bold mb-3">معلومات المجموعة</h2>
               {group.coverImageUrl && (
                 <img
                   src={group.coverImageUrl}
                   alt={group.name}
-                  className="w-full h-32 object-cover rounded-lg mb-4"
+                  className="w-100 rounded-3 mb-3"
+                  style={{ height: 130, objectFit: 'cover' }}
                 />
               )}
-              <p className="text-gray-700 mb-2">{group.description}</p>
-              <div className="flex items-center text-sm text-gray-500 mb-4 gap-3">
+              <p className="text-dark mb-2">{group.description}</p>
+              <div className="d-flex align-items-center text-secondary small mb-3 gap-3">
                 <span>عدد الأعضاء: {group.memberCount}</span>
                 {group.createdAt && (
                   <span>تأسست: {new Date(group.createdAt).toLocaleDateString()}</span>
                 )}
               </div>
-              <h3 className="text-lg font-bold mb-3">الأعضاء ({group.members.length})</h3>
-              <div className="space-y-3">
+              <h3 className="fs-6 fw-bold mb-2">الأعضاء ({group.members.length})</h3>
+              <div className="vstack gap-2">
                 {group.members
                   .sort((a, b) => (a.role === 'admin' ? -1 : 1))
                   .map((member) => (
-                    <div key={member.id} className="flex items-center space-x-3">
-                      <div className="relative">
+                    <div key={member.id} className="d-flex align-items-center gap-2">
+                      <div className="position-relative">
                         <img
                           src={member.avatar || '/default-avatar.png'}
                           alt={member.name}
-                          className="w-10 h-10 rounded-full object-cover"
+                          className="rounded-circle object-cover"
+                          style={{ width: 40, height: 40 }}
                         />
                         <span
-                          className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-white ${
-                            onlineUsers.has(member.id) ? 'bg-green-500' : 'bg-gray-400'
-                          }`}
+                          className={`position-absolute bottom-0 end-0 rounded-circle border border-white`}
+                          style={{
+                            width: 12,
+                            height: 12,
+                            background: onlineUsers.has(member.id) ? '#28a745' : '#adb5bd'
+                          }}
                         ></span>
                       </div>
                       <div>
-                        <p className="font-semibold flex items-center gap-1">
+                        <span className="fw-semibold d-flex align-items-center gap-1">
                           {member.name}
                           {member.role === 'admin' && (
-                            <span className="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">مشرف</span>
+                            <span className="badge bg-primary ms-1">مشرف</span>
                           )}
-                        </p>
-                        <p className="text-sm text-gray-500">{member.role !== 'admin' ? member.role : ''}</p>
+                        </span>
+                        <span className="text-secondary small">{member.role !== 'admin' ? member.role : ''}</span>
                       </div>
                     </div>
                   ))}
