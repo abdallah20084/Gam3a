@@ -1,6 +1,5 @@
 // app/api/groups/[groupId]/members/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import type { AppRouteHandlerFnContext } from 'next/dist/server/future/route-modules/app-route/module';
 import connectDB from '@/lib/db';
 import GroupMember from '@/models/GroupMember';
 import Group from '@/models/Group';
@@ -24,10 +23,10 @@ const getUserIdFromToken = (token: string) => {
 
 export async function POST(
   req: NextRequest,
-  context: AppRouteHandlerFnContext<{ groupId: string }>
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
   await connectDB();
-  const { groupId } = context.params;
+  const { groupId } = await params;
 
   if (!mongoose.Types.ObjectId.isValid(groupId)) {
     return NextResponse.json({ error: 'معرف مجموعة غير صالح.' }, { status: 400 });
@@ -73,10 +72,10 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  context: AppRouteHandlerFnContext<{ groupId: string }>
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
   await connectDB();
-  const { groupId } = context.params;
+  const { groupId } = await params;
 
   if (!mongoose.Types.ObjectId.isValid(groupId)) {
     return NextResponse.json({ error: 'معرف مجموعة غير صالح.' }, { status: 400 });

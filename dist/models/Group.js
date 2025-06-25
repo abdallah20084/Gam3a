@@ -33,16 +33,11 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// models/Group.ts
 const mongoose_1 = __importStar(require("mongoose"));
 const GroupSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
-    coverImageUrl: { type: String },
     admin: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
-    memberCount: { type: Number, default: 0 },
-}, {
-    timestamps: true,
-});
-const Group = mongoose_1.default.models.Group || mongoose_1.default.model('Group', GroupSchema);
-exports.default = Group;
+    coverImageUrl: { type: String },
+}, { timestamps: true });
+exports.default = mongoose_1.default.models.Group || mongoose_1.default.model('Group', GroupSchema);

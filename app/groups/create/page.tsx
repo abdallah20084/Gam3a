@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import Navbar from '@/components/Navbar';
 import DOMPurify from 'dompurify';
 
 export default function CreateGroupPage() {
@@ -74,13 +73,9 @@ export default function CreateGroupPage() {
     }
   };
 
-  if (!isUserLoggedIn) {
-    return <LoadingSpinner />;
-  }
-
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
-      <Navbar />
+      {/* حذف النافبار من هنا */}
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-xl border border-gray-200">
           <div className="container py-5">
@@ -139,8 +134,12 @@ export default function CreateGroupPage() {
                       />
                     </div>
                     <div className="d-grid">
-                      <button type="submit" className="btn btn-primary fw-bold" disabled={loading}>
-                        {loading ? 'جاري الإنشاء...' : 'إنشاء المجموعة'}
+                      <button
+                        type="submit"
+                        className="btn btn-primary"
+                        disabled={loading}
+                      >
+                        {loading ? <LoadingSpinner size="sm" /> : 'إنشاء المجموعة'}
                       </button>
                     </div>
                   </form>
@@ -153,3 +152,4 @@ export default function CreateGroupPage() {
     </div>
   );
 }
+

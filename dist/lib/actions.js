@@ -12,7 +12,11 @@ const db_1 = __importDefault(require("./db"));
 async function getGroups() {
     try {
         const connection = await (0, db_1.default)(); // استدعاء معدل
-        const groups = await Group_1.default.find({}).populate('members.userId', 'name avatar');
+        // تعديل استدعاء populate لتجنب StrictPopulateError
+        const groups = await Group_1.default.find({}).lean();
+        
+        // إذا كنت بحاجة إلى معلومات الأعضاء، استخدم نهجًا آخر
+        
         return JSON.parse(JSON.stringify(groups));
     }
     catch (error) {

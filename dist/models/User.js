@@ -40,6 +40,7 @@ const UserSchema = new mongoose_1.Schema({
     email: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true },
     avatar: { type: String },
+    groups: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'Group' }],
     // أضف أي حقول إضافية هنا حسب الحاجة
 }, { timestamps: true });
 const User = mongoose_1.default.models.User || mongoose_1.default.model('User', UserSchema);

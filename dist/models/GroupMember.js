@@ -33,13 +33,13 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-// models/GroupMember.ts
 const mongoose_1 = __importStar(require("mongoose"));
 const GroupMemberSchema = new mongoose_1.Schema({
-    group: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Group', required: true },
     user: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+    group: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Group', required: true },
     role: { type: String, enum: ['admin', 'member'], default: 'member' },
-    joinedAt: { type: Date, default: Date.now }
-});
-const GroupMember = mongoose_1.default.models.GroupMember || mongoose_1.default.model('GroupMember', GroupMemberSchema);
-exports.default = GroupMember;
+    joinedAt: { type: Date, default: Date.now },
+}, { timestamps: false });
+// إنشاء فهرس مركب للتأكد من أن كل مستخدم ينضم إلى مجموعة مرة واحدة فقط
+GroupMemberSchema.index({ user: 1, group: 1 }, { unique: true });
+exports.default = mongoose_1.default.models.GroupMember || mongoose_1.default.model('GroupMember', GroupMemberSchema);

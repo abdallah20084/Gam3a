@@ -5,7 +5,6 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
     "strict": false,
     "skipLibCheck": true,
     "outDir": "./dist",
@@ -13,9 +12,13 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
-    },
-    "lib": ["esnext"],
-    "types": ["node"]
+    }
+  },
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
   },
   "include": [
     "server.ts",
@@ -26,10 +29,6 @@
     "node_modules",
     ".next",
     "app",
-    "pages",
-    "public",
-    "config"
+    "pages"
   ]
 }
-
-

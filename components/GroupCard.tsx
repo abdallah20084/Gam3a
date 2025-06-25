@@ -1,54 +1,55 @@
-import Link from 'next/link';
+'use client';
 
-// تعريف الواجهة لـ props group لضمان Type Safety
+import { Card, Button } from 'react-bootstrap';
+import Link from 'next/link';
+import Image from 'next/image';
+
+interface Group {
+  _id: string;
+  name: string;
+  description?: string;
+  coverImageUrl?: string;
+  memberCount: number;
+}
+
 interface GroupCardProps {
-  group: {
-    id: string; // تم تعديلها لتطابق 'id' التي تأتي من الـ API بدلاً من '_id'
-    name: string;
-    description: string;
-    coverImageUrl?: string | null; // إذا كان يمكن أن يكون null
-    memberCount: number; // تم تعديلها لتطابق 'memberCount' من الـ API
-    currentUserRole: string; // لإظهار دور المستخدم إذا كنت تريد عرضه في البطاقة
-    // يمكنك إضافة حقول أخرى هنا حسب ما يرجع من الـ API
-  };
+  group: Group;
 }
 
 export default function GroupCard({ group }: GroupCardProps) {
+  const defaultCoverImage = '/images/default-group-cover.jpg';
+  
   return (
-    <div className="card h-100 shadow-sm">
-      {group.coverImageUrl ? (
-        <img
-          src={group.coverImageUrl}
+    <Card className="h-100 shadow-sm">
+      <div style={{ position: 'relative', width: '100%', height: '160px' }}>
+        <Image
+          src={group.coverImageUrl || defaultCoverImage}
           alt={group.name}
-          className="card-img-top"
-          style={{ height: 130, objectFit: 'cover' }}
+          fill
+          style={{ objectFit: 'cover' }}
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
         />
-      ) : (
-        <div
-          className="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white"
-          style={{ height: 130 }}
-        >
-          لا يوجد صورة غلاف
-        </div>
-      )}
-      <div className="card-body">
-        <h5 className="card-title text-end">{group.name}</h5>
-        <p className="card-text text-end text-muted small mb-2">{group.description}</p>
-        <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <span className="text-muted small">{group.memberCount} أعضاء</span>
-          {group.currentUserRole && group.currentUserRole !== 'none' && (
-            <span className="badge bg-info text-dark ms-2">دوري: {group.currentUserRole}</span>
+      </div>
+      <Card.Body>
+        <Card.Title className="fw-bold">{group.name}</Card.Title>
+        <Card.Text>
+          {group.description ? (
+            group.description.length > 100 
+              ? `${group.description.substring(0, 100)}...` 
+              : group.description
+          ) : (
+            'لا يوجد وصف لهذه المجموعة'
           )}
+        </Card.Text>
+        <div className="d-flex justify-content-between align-items-center">
+          <small className="text-muted">{group.memberCount} أعضاء</small>
+          <Link href={`/group/${group._id}`} passHref legacyBehavior>
+            <Button variant="outline-primary" size="sm">
+              عرض المجموعة
+            </Button>
+          </Link>
         </div>
-      </div>
-      <div className="card-footer bg-white border-0 d-flex justify-content-end">
-        <Link
-          href={`/group/${group.id}`}
-          className="btn btn-primary btn-sm"
-        >
-          انضم الآن
-        </Link>
-      </div>
-    </div>
+      </Card.Body>
+    </Card>
   );
 }

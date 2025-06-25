@@ -49,13 +49,13 @@ export async function POST(request: Request) {
       name,
       description,
       creator: userId,
-      admin: userId, // المنشئ هو المدير تلقائياً
+      admin: userId, // المنشئ هو المدير تلقائ
       // ازالة members و currentMembers من Group model إذا كنت ستعتمد على GroupMember
       // members: [userId],
       // currentMembers: 1,
     });
 
-    // 2. إنشاء عضوية للمستخدم المنشئ في GroupMember model (هام جداً)
+    // 2. إنشاء عضوية للمستخدم المنشئ في GroupMember model (هام)
     const newGroupMember = new GroupMember({
       user: userId,
       group: newGroup._id,
@@ -65,11 +65,11 @@ export async function POST(request: Request) {
 
 
     // 3. تحديث المستخدم لإضافة المجموعة إلى "مجموعاتي"
-    // تأكد أن موديل المستخدم لديه خاصية "groups" كـ array of ObjectIds
     if (!user.groups) {
         user.groups = []; // تهيئة إذا لم تكن موجودة
     }
-    user.groups.push(newGroup._id);
+    // تحويل _id إلى ObjectId صريح
+    user.groups.push(new mongoose.Types.ObjectId(newGroup._id.toString()));
     await user.save();
 
     // 4. إرجاع استجابة النجاح
@@ -80,3 +80,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, error: error.message || 'خطأ داخلي في الخادم.' }, { status: 500 });
   }
 }
+

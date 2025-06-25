@@ -81,7 +81,7 @@ export default function EditGroupPage() {
           setError(err.response.data?.error || 'حدث خطأ أثناء جلب بيانات المجموعة.');
         }
       } else {
-        setError('حدث خطأ غير متوقع. الرجاء المحاولة لاحقاً.');
+        setError('حدث خطأ غير متوقع. الرجاء المحاولة لاحقٍ.');
       }
     } finally {
       setLoading(false);
@@ -136,7 +136,7 @@ export default function EditGroupPage() {
           router.push('/auth/login');
         }
       } else {
-        setError('حدث خطأ غير متوقع. الرجاء المحاولة لاحقاً.');
+        setError('حدث خطأ غير متوقع. الرجاء المحاولة لاحقٍ.');
       }
     } finally {
       setIsSaving(false);
@@ -181,7 +181,6 @@ export default function EditGroupPage() {
 
   return (
     <div className="min-vh-100 bg-light d-flex flex-column">
-      <Navbar />
       <main className="flex-grow-1 container py-5">
         <div className="row justify-content-center">
           <div className="col-12 col-md-10 col-lg-8">
@@ -250,3 +249,4 @@ export default function EditGroupPage() {
     </div>
   );
 }
+

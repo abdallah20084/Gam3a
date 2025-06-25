@@ -1,21 +1,24 @@
-// models/GroupMember.ts
-import mongoose, { Document, Schema, Model } from 'mongoose';
-import { IUser } from './User';
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IGroupMember extends Document {
-  group: mongoose.Types.ObjectId;
-  user: mongoose.Types.ObjectId | IUser;
+  user: Types.ObjectId;
+  group: Types.ObjectId;
   role: 'admin' | 'member';
   joinedAt: Date;
 }
 
-const GroupMemberSchema: Schema = new Schema({
-  group: { type: Schema.Types.ObjectId, ref: 'Group', required: true },
-  user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  role: { type: String, enum: ['admin', 'member'], default: 'member' },
-  joinedAt: { type: Date, default: Date.now }
-});
+const GroupMemberSchema = new Schema<IGroupMember>(
+  {
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    group: { type: Schema.Types.ObjectId, ref: 'Group', required: true },
+    role: { type: String, enum: ['admin', 'member'], default: 'member' },
+    joinedAt: { type: Date, default: Date.now },
+  },
+  { timestamps: false }
+);
 
-const GroupMember: Model<IGroupMember> = mongoose.models.GroupMember || mongoose.model<IGroupMember>('GroupMember', GroupMemberSchema);
+// إنشاء فهرس مركب للتأكد من أن كل مستخدم ينضم إلى مجموعة مرة واحدة فقط
+GroupMemberSchema.index({ user: 1, group: 1 }, { unique: true });
 
-export default GroupMember;
+export default mongoose.models.GroupMember || mongoose.model<IGroupMember>('GroupMember', GroupMemberSchema);
+

@@ -1,26 +1,23 @@
-// models/Group.ts
-import mongoose, { Document, Schema, Model } from 'mongoose';
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
 export interface IGroup extends Document {
   name: string;
   description?: string;
+  admin: Types.ObjectId;
   coverImageUrl?: string;
-  admin: mongoose.Types.ObjectId;
-  memberCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-const GroupSchema: Schema = new Schema({
-  name: { type: String, required: true, trim: true },
-  description: { type: String, trim: true },
-  coverImageUrl: { type: String },
-  admin: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  memberCount: { type: Number, default: 0 },
-}, {
-  timestamps: true,
-});
+const GroupSchema = new Schema<IGroup>(
+  {
+    name: { type: String, required: true, trim: true },
+    description: { type: String, trim: true },
+    admin: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    coverImageUrl: { type: String },
+  },
+  { timestamps: true }
+);
 
-const Group: Model<IGroup> = mongoose.models.Group || mongoose.model<IGroup>('Group', GroupSchema);
+export default mongoose.models.Group || mongoose.model<IGroup>('Group', GroupSchema);
 
-export default Group;

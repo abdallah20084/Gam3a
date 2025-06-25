@@ -2,13 +2,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { use } from 'react';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import axios from 'axios';
-import { Dropdown } from 'react-bootstrap'; // تأكد من تثبيت react-bootstrap
+import { Dropdown } from 'react-bootstrap';
 
 interface Group {
   id: string;
@@ -24,7 +25,14 @@ interface Group {
 
 const GROUPS_PER_PAGE = 10;
 
-export default function HomePage() {
+export default function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const params = use(searchParams);
+  const router = useRouter();
+  
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,9 +42,6 @@ export default function HomePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [tabType, setTabType] = useState<'all' | 'joined' | 'myGroups'>('all');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
-
-  const searchParams = useSearchParams();
-  const router = useRouter();
 
   const fetchGroups = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -75,7 +80,7 @@ export default function HomePage() {
         } else if (err.response.data && err.response.data.error) {
           setError(err.response.data.error);
         } else {
-          setError('فشل في جلب المجموعات. الرجاء المحاولة لاحقاً.');
+          setError('فشل في جلب المجموعات. الرجاء المحاولة لاحق<|im_start|>.');
         }
       } else {
         setError('حدث خطأ غير متوقع أثناء جلب المجموعات.');
@@ -87,16 +92,13 @@ export default function HomePage() {
   }, [currentPage, tabType, searchTerm, router]);
 
   useEffect(() => {
-    const nameFromUrl = searchParams.get('welcomeName');
+    const nameFromUrl = params.welcomeName;
     if (nameFromUrl) {
-      setWelcomeName(decodeURIComponent(nameFromUrl));
-      const newSearchParams = new URLSearchParams(searchParams.toString());
-      newSearchParams.delete('welcomeName');
-      const newUrl = `${window.location.pathname}${newSearchParams.toString() ? `?${newSearchParams.toString()}` : ''}`;
-      router.replace(newUrl);
+      setWelcomeName(typeof nameFromUrl === 'string' ? decodeURIComponent(nameFromUrl) : null);
+      // لا نحتاج لتعديل الـ URL هنا لأن Next.js 15 يتعامل مع searchParams بشكل مختلف
     }
     fetchGroups();
-  }, [searchParams, fetchGroups, router]);
+  }, [params, fetchGroups]);
 
   const handleCreateGroupClick = () => {
     if (!isUserLoggedIn) {
@@ -195,201 +197,200 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-vh-100 bg-light d-flex flex-column" dir="rtl">
-      <Navbar />
-
-      <main className="flex-grow-1 container py-4">
-        {welcomeName && (
-          <div className="alert alert-primary text-center fw-bold mb-4">
-            مرحباً بك يا {welcomeName}! يسعدنا انضمامك.
-          </div>
-        )}
-
-        <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-          <h1 className="fw-bold fs-2 mb-0">المجموعات</h1>
-          <button
+    <div className="min-vh-100 bg-light">
+      <div className="container py-4">
+        {/* عنوان الصفحة */}
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h1 className="fs-2 fw-bold">المجموعات</h1>
+          <button 
+            className="btn btn-primary rounded-pill d-flex align-items-center gap-1"
             onClick={handleCreateGroupClick}
-            className="btn btn-primary fw-bold px-4 py-2 rounded-pill shadow-sm"
           >
-            + إنشاء مجموعة جديدة
+            <i className="bi bi-plus-circle"></i>
+            <span>إنشاء مجموعة جديدة</span>
           </button>
         </div>
 
-        <div className="mb-4 row g-2 align-items-center">
-          <div className="col-12 col-md-6">
+        {/* شريط البحث */}
+        <div className="mb-4">
+          <div className="input-group">
             <input
               type="text"
+              className="form-control border-end-0 rounded-pill rounded-end"
               placeholder="ابحث عن مجموعة..."
               value={searchTerm}
-              onChange={handleSearchChange}
-              className="form-control rounded-pill"
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && fetchGroups()}
             />
-          </div>
-          <div className="col-12 col-md-6">
-            <ul className="nav nav-pills justify-content-end gap-2">
-              <li className="nav-item">
-                <button
-                  className={`nav-link ${tabType === 'all' ? 'active' : ''}`}
-                  onClick={() => handleTabChange('all')}
-                >
-                  جميع المجموعات
-                </button>
-              </li>
-              <li className="nav-item">
-                <button
-                  className={`nav-link ${tabType === 'joined' ? 'active' : ''}`}
-                  onClick={() => handleTabChange('joined')}
-                >
-                  مجموعاتي المنضمة
-                </button>
-              </li>
-              <li className="nav-item">
-                <button
-                  className={`nav-link ${tabType === 'myGroups' ? 'active' : ''}`}
-                  onClick={() => handleTabChange('myGroups')}
-                >
-                  مجموعاتي التي أديرها
-                </button>
-              </li>
-            </ul>
+            <button 
+              className="btn btn-outline-secondary border-start-0 rounded-pill rounded-start" 
+              type="button"
+              onClick={fetchGroups}
+            >
+              <i className="bi bi-search"></i>
+            </button>
           </div>
         </div>
 
-        {loading ? (
-          <div className="d-flex justify-content-center py-5">
-            <LoadingSpinner />
+        {/* علامات التبويب */}
+        <div className="mb-4">
+          <div className="d-flex gap-2">
+            <button
+              className={`btn ${tabType === 'all' ? 'btn-primary' : 'btn-outline-secondary'} rounded-pill`}
+              onClick={() => setTabType('all')}
+            >
+              جميع المجموعات
+            </button>
+            <button
+              className={`btn ${tabType === 'joined' ? 'btn-primary' : 'btn-outline-secondary'} rounded-pill`}
+              onClick={() => setTabType('joined')}
+            >
+              مجموعاتي المنضمة
+            </button>
+            <button
+              className={`btn ${tabType === 'myGroups' ? 'btn-primary' : 'btn-outline-secondary'} rounded-pill`}
+              onClick={() => setTabType('myGroups')}
+            >
+              مجموعاتي التي أديرها
+            </button>
           </div>
-        ) : error ? (
-          <ErrorMessage message={error} />
-        ) : groups.length === 0 ? (
-          <p className="text-center text-muted py-5">
-            {tabType === 'joined' && !isUserLoggedIn
-              ? 'الرجاء تسجيل الدخول لعرض مجموعاتك المنضمة.'
-              : tabType === 'myGroups' && !isUserLoggedIn
-              ? 'الرجاء تسجيل الدخول لعرض المجموعات التي تديرها.'
-              : tabType === 'joined' && isUserLoggedIn
-              ? 'لم تنضم إلى أي مجموعات بعد. استكشف "جميع المجموعات" أو انشئ مجموعتك الخاصة!'
-              : tabType === 'myGroups' && isUserLoggedIn
-              ? 'لا تدير أي مجموعات حالياً. انشئ مجموعتك الخاصة!'
-              : 'لا توجد مجموعات متاحة حالياً تطابق بحثك. كن أول من ينشئ مجموعة!'}
-          </p>
-        ) : (
-          <>
-            <div className="row g-4">
-              {groups.map((group) => (
-                <div key={group.id} className="col-12 col-sm-6 col-md-4 col-lg-3">
-                  <div className="card h-100 shadow-sm position-relative">
-                    {/* قائمة الخيارات (ثلاث نقاط) تظهر فقط للمالك أو الأدمن */}
-                    {(group.canEdit || group.isAdmin) && (
-                      <Dropdown className="position-absolute start-0 mt-2 ms-2" align="start">
-                        <Dropdown.Toggle
-                          variant="link"
-                          bsPrefix="p-0 border-0 bg-transparent"
-                          style={{ boxShadow: 'none', color: '#333', fontSize: '1.5rem' }}
-                          id={`dropdown-group-${group.id}`}
-                        >
-                          <span style={{ fontSize: '1.5rem', lineHeight: '1' }}>⋮</span>
-                        </Dropdown.Toggle>
-                        <Dropdown.Menu>
-                          <Dropdown.Item onClick={() => handleEditGroup(group.id)}>
-                            تعديل المجموعة
-                          </Dropdown.Item>
-                          <Dropdown.Item onClick={() => handleDeleteGroup(group.id, group.name)}>
-                            حذف المجموعة
-                          </Dropdown.Item>
-                        </Dropdown.Menu>
-                      </Dropdown>
-                    )}
+        </div>
 
-                    <Link href={`/group/${group.id}`} className="text-decoration-none">
-                      {group.coverImageUrl ? (
-                        <img
-                          src={group.coverImageUrl}
-                          alt={group.name}
-                          className="card-img-top"
-                          style={{ height: 150, objectFit: 'cover' }}
-                        />
-                      ) : (
-                        <div className="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white" style={{ height: 150 }}>
-                          لا يوجد صورة غلاف
-                        </div>
-                      )}
-                    </Link>
-                    <div className="card-body">
-                      <h5 className="card-title text-end">{group.name}</h5>
-                      {group.description && (
-                        <p className="card-text text-end text-muted small">
-                          {group.description.substring(0, 70)}
-                          {group.description.length > 70 ? '...' : ''}
-                        </p>
-                      )}
-                      <p className="card-text text-end text-muted small">{group.memberCount} أعضاء</p>
+        {/* قائمة المجموعات */}
+        {loading ? (
+          <LoadingSpinner />
+        ) : error ? (
+          <div className="alert alert-danger">{error}</div>
+        ) : groups.length === 0 ? (
+          <div className="alert alert-info">لا توجد مجموعات متاحة حاليًا</div>
+        ) : (
+          <div className="row g-4">
+            {groups.map((group) => (
+              <div key={group.id} className="col-12 col-md-6 col-lg-3">
+                <div className="card h-100 shadow-sm border-0 position-relative">
+                  {/* زر القائمة المنسدلة */}
+                  {group.isOwner && (
+                    <div className="position-absolute top-0 end-0 m-2">
+                      <div className="dropdown">
+                        <button 
+                          className="btn btn-light btn-sm rounded-circle" 
+                          type="button" 
+                          data-bs-toggle="dropdown"
+                        >
+                          <i className="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul className="dropdown-menu dropdown-menu-end">
+                          <li>
+                            <button 
+                              className="dropdown-item" 
+                              onClick={() => handleEditGroup(group.id)}
+                            >
+                              <i className="bi bi-pencil me-2"></i>
+                              تعديل المجموعة
+                            </button>
+                          </li>
+                          <li>
+                            <button 
+                              className="dropdown-item text-danger" 
+                              onClick={() => handleDeleteGroup(group.id, group.name)}
+                            >
+                              <i className="bi bi-trash me-2"></i>
+                              حذف المجموعة
+                            </button>
+                          </li>
+                        </ul>
+                      </div>
                     </div>
-                    <div className="card-footer bg-white border-0 d-flex flex-wrap gap-2 justify-content-end">
-                      {group.isMember ? (
-                        <button
-                          className="btn btn-outline-danger btn-sm"
-                          onClick={() => handleJoinLeaveGroup(group.id, 'leave')}
-                        >
-                          مغادرة المجموعة
-                        </button>
-                      ) : (
-                        <button
-                          className="btn btn-outline-primary btn-sm"
-                          onClick={() => handleJoinLeaveGroup(group.id, 'join')}
-                        >
-                          انضمام
-                        </button>
-                      )}
-                      <Link href={`/group/${group.id}`} className="btn btn-outline-secondary btn-sm">
+                  )}
+                  
+                  {/* صورة الغلاف */}
+                  <div 
+                    className="bg-secondary" 
+                    style={{ height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    {group.coverImageUrl ? (
+                      <img
+                        src={group.coverImageUrl}
+                        alt={group.name}
+                        className="card-img-top"
+                        style={{ height: '150px', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <span className="text-white">لا يوجد صورة غلاف</span>
+                    )}
+                  </div>
+                  
+                  {/* محتوى البطاقة */}
+                  <div className="card-body">
+                    <h5 className="card-title fw-bold mb-1">{group.name}</h5>
+                    <p className="card-text text-muted small mb-3">
+                      {group.memberCount || 0} أعضاء
+                    </p>
+                    
+                    {/* أزرار التفاعل */}
+                    <div className="d-flex gap-2">
+                      <button 
+                        className="btn btn-outline-danger flex-grow-1"
+                        onClick={() => handleJoinGroup(group.id)}
+                        disabled={group.isMember}
+                      >
+                        {group.isMember ? 'مغادرة المجموعة' : 'مشاركة المجموعة'}
+                      </button>
+                      <button 
+                        className="btn btn-outline-secondary flex-grow-1"
+                        onClick={() => router.push(`/group/${group.id}`)}
+                      >
                         عرض
-                      </Link>
+                      </button>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {totalPages > 1 && (
-              <nav className="d-flex justify-content-center mt-4">
-                <ul className="pagination">
-                  <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                    <button
-                      className="page-link"
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      tabIndex={currentPage === 1 ? -1 : 0}
-                      aria-disabled={currentPage === 1}
-                    >
-                      السابق
-                    </button>
-                  </li>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                      <button
-                        className="page-link"
-                        onClick={() => handlePageChange(page)}
-                        aria-current={currentPage === page ? 'page' : undefined}
-                      >
-                        {page}
-                      </button>
-                    </li>
-                  ))}
-                  <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                    <button
-                      className="page-link"
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      tabIndex={currentPage === totalPages ? -1 : 0}
-                      aria-disabled={currentPage === totalPages}
-                    >
-                      التالي
-                    </button>
-                  </li>
-                </ul>
-              </nav>
-            )}
-          </>
+              </div>
+            ))}
+          </div>
         )}
-      </main>
+        
+        {/* التنقل بين الصفحات */}
+        {totalPages > 1 && (
+          <nav className="mt-4">
+            <ul className="pagination justify-content-center">
+              <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                <button 
+                  className="page-link" 
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                >
+                  السابق
+                </button>
+              </li>
+              
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <li 
+                  key={page} 
+                  className={`page-item ${currentPage === page ? 'active' : ''}`}
+                >
+                  <button 
+                    className="page-link" 
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </button>
+                </li>
+              ))}
+              
+              <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                <button 
+                  className="page-link" 
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                >
+                  التالي
+                </button>
+              </li>
+            </ul>
+          </nav>
+        )}
+      </div>
     </div>
   );
 }
+
+

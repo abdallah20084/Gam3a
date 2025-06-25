@@ -5,7 +5,7 @@ import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken'; // <--- FIX: Corrected import to * as jwt
 
-// تأكد أن هذا المفتاح السري يطابق تماماً المفتاح في ملف .env
+// تأكد أن هذا المفتاح السري يطابق تمام المفتاح في ملف .env
 // ونفس المفتاح في server.ts
 // يفضل استخدام متغيرات البيئة مباشرة لضمان الاتساق.
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -14,9 +14,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // ولكن يفضل التأكد من تعريفه في .env لتجنب مشاكل الأمان.
 if (!JWT_SECRET) {
   console.error('JWT_SECRET is not defined in environment variables. Using a fallback.');
-  // يمكنك رمي خطأ أو استخدام مفتاح سري قوي افتراضي، لكن هذا ليس آمناً للإنتاج.
+  // يمكنك رمي خطأ أو استخدام مفتاح سري قوي افتراضي، لكن هذا ليس آمن للإنتاج.
   // في بيئة الإنتاج، يجب أن يكون معرّفاً دائماً.
-  // لأغراض التطوير، يمكن أن نضيف مفتاحاً افتراضياً قوياً هنا.
+  // لأغراض التطوير، يمكن أن نضيف مفتاح افتراضي قوٍ هنا.
   // For now, let's throw an error to make it explicit for dev
   throw new Error('JWT_SECRET environment variable is not set. Please set it in your .env file.');
 }
@@ -51,12 +51,17 @@ export async function POST(request: Request) {
 
     // هنا يتم توقيع الرمز المميز
     const token = jwt.sign(
-      { id: user._id.toString(), phone: user.phone, name: user.name }, // <--- id يجب أن يكون string
+      { 
+        id: user._id.toString(), 
+        // استخدام التحقق من وجود الخاصية قبل استخدامها
+        phone: user.phone?.toString() || '', 
+        name: user.name || '' 
+      },
       JWT_SECRET, // <--- استخدام المفتاح السري المعرف
       { expiresIn: '7d' }
     );
 
-    // أيضاً، قم بتخزين userId في localStorage لكي يتم استخدامه للتعرف على المستخدم في الواجهة الأمامية
+    //، قم بتخزين userId في localStorage لكي يتم استخدامه للتعرف على المستخدم في الواجهة الأمامية
     return NextResponse.json({
         message: 'تم تسجيل الدخول بنجاح!',
         token,
@@ -69,3 +74,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'حدث خطأ غير متوقع أثناء تسجيل الدخول.' }, { status: 500 });
   }
 }
+

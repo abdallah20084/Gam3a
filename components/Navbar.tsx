@@ -1,9 +1,9 @@
-// components/Navbar.tsx
 'use client';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
+import Script from 'next/script';
 
 export default function Navbar() {
   const router = useRouter();
@@ -45,8 +45,45 @@ export default function Navbar() {
 
   // تحميل جافاسكريبت البوتستراب لدعم القوائم المنسدلة والـ collapse
   useEffect(() => {
-    import('bootstrap/dist/js/bootstrap.bundle.min.js');
+    if (typeof window !== 'undefined') {
+      // تعريف window.bootstrap لتجنب أخطاء TypeScript
+      declare global {
+        interface Window {
+          bootstrap: any;
+        }
+      }
+      
+      // استخدام dynamic import مع معالجة الأخطاء
+      import('bootstrap/dist/js/bootstrap.bundle.min.js')
+        .then(() => {
+          // تأخير التهيئة للتأكد من تحميل Bootstrap بالكامل
+          setTimeout(() => {
+            // تهيئة جميع عناصر Bootstrap
+            const dropdownElementList = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+            dropdownElementList.forEach(element => {
+              if (window.bootstrap && window.bootstrap.Dropdown) {
+                new window.bootstrap.Dropdown(element);
+              }
+            });
+          }, 100);
+        })
+        .catch(err => {
+          console.error('فشل في تحميل Bootstrap:', err);
+        });
+    }
   }, []);
+
+  // أضف هذا المكون لتحميل Bootstrap JS
+  const BootstrapScript = () => {
+    return (
+      <Script
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossOrigin="anonymous"
+        strategy="afterInteractive"
+      />
+    );
+  };
 
   return (
     <>
@@ -121,10 +158,11 @@ export default function Navbar() {
                 {/* أيقونة الرسايل مع قائمة منسدلة */}
                 <div className="dropdown me-2">
                   <button
-                    className="btn btn-link p-0 dropdown-toggle shadow-hover"
+                    className="btn btn-link p-0 shadow-hover"
                     type="button"
                     id="messagesDropdown"
                     data-bs-toggle="dropdown"
+                    data-bs-auto-close="true"
                     aria-expanded="false"
                     style={{ transition: 'box-shadow 0.2s', fontSize: '1.7rem' }}
                   >
@@ -136,16 +174,16 @@ export default function Navbar() {
                     <li>
                       <span className="dropdown-item text-muted">لا توجد رسائل جديدة</span>
                     </li>
-                    {/* يمكنك إضافة رسائل هنا */}
                   </ul>
                 </div>
                 {/* أيقونة الجرس مع قائمة منسدلة */}
                 <div className="dropdown me-2">
                   <button
-                    className="btn btn-link p-0 dropdown-toggle shadow-hover"
+                    className="btn btn-link p-0 shadow-hover"
                     type="button"
                     id="notificationsDropdown"
                     data-bs-toggle="dropdown"
+                    data-bs-auto-close="true"
                     aria-expanded="false"
                     style={{ transition: 'box-shadow 0.2s', fontSize: '1.7rem' }}
                   >
@@ -157,19 +195,16 @@ export default function Navbar() {
                     <li>
                       <span className="dropdown-item text-muted">لا توجد إشعارات جديدة</span>
                     </li>
-                    {/* يمكنك إضافة إشعارات هنا */}
                   </ul>
                 </div>
                 {/* صورة واسم المستخدم مع قائمة منسدلة */}
-                <div
-                  className="dropdown"
-                  ref={dropdownRef}
-                >
+                <div className="dropdown" ref={dropdownRef}>
                   <button
-                    className="btn btn-link p-0 me-2 dropdown-toggle d-flex align-items-center shadow-hover"
+                    className="btn btn-link p-0 me-2 d-flex align-items-center shadow-hover"
                     type="button"
                     id="userDropdown"
                     data-bs-toggle="dropdown"
+                    data-bs-auto-close="true"
                     aria-expanded="false"
                     style={{ cursor: 'pointer', transition: 'box-shadow 0.2s' }}
                   >
@@ -197,7 +232,7 @@ export default function Navbar() {
                       height={38}
                     />
                   </button>
-                  <ul className="dropdown-menu dropdown-menu-end text-end">
+                  <ul className="dropdown-menu dropdown-menu-end text-end" aria-labelledby="userDropdown">
                     <li>
                       <Link href="/profile" className="dropdown-item shadow-hover fw-semibold fs-6 text-dark">الملف الشخصي</Link>
                     </li>
@@ -252,6 +287,22 @@ export default function Navbar() {
         box-shadow: 0 0 0 0.25rem rgba(220,53,69,.12) !important;
       }
     `}</style>
+    {/* تحميل Bootstrap JS */}
+    <BootstrapScript />
     </>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+

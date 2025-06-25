@@ -56,10 +56,11 @@ const Message_1 = __importDefault(require("./models/Message"));
 const GroupMember_1 = __importDefault(require("./models/GroupMember"));
 const User_1 = __importDefault(require("./models/User"));
 const Group_1 = __importDefault(require("./models/Group"));
-const dev = process.env.NODE_ENV !== 'production';
+// استخدام process.env.NODE_ENV إذا كان موجودًا، وإلا استخدام 'development'
+const isDev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
-const app = (0, next_1.default)({ dev, hostname, port });
+const app = (0, next_1.default)({ dev: isDev, hostname, port });
 const handle = app.getRequestHandler();
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -219,7 +220,7 @@ app.prepare().then(() => {
                     });
                 }
                 catch (error) {
-                    socket.emit('errorJoiningGroup', 'حدث خطأ غير متوقع أثناء الانضمام إلى المجموعة. الرجاء المحاولة لاحقاً.');
+                    socket.emit('errorJoiningGroup', 'حدث خطأ غير متوقع أثناء الانضمام إلى المجموعة. الرجاء المحاولة لاحق.');
                     socket.disconnect();
                 }
             });
@@ -238,7 +239,7 @@ app.prepare().then(() => {
                         return;
                     }
                     if (sanitizedContent.length > 1000) {
-                        socket.emit('messageError', 'الرسالة طويلة جداً (الحد الأقصى 1000 حرف).');
+                        socket.emit('messageError', 'الرسالة طويلة (الحد الأقصى 1000 حرف).');
                         return;
                     }
                     let userId;
@@ -286,7 +287,7 @@ app.prepare().then(() => {
                 }
                 catch (error) {
                     console.error(`Socket ${socket.id}: Server error sending message:`, error);
-                    socket.emit('messageError', 'حدث خطأ غير متوقع أثناء إرسال الرسالة. الرجاء المحاولة لاحقاً.');
+                    socket.emit('messageError', 'حدث خطأ غير متوقع أثناء إرسال الرسالة. الرجاء المحاولة لاحق.');
                 }
             });
             // New Socket.IO Event: Delete Message
@@ -339,7 +340,7 @@ app.prepare().then(() => {
                 }
                 catch (error) {
                     console.error(`Socket ${socket.id}: Server error deleting message:`, error);
-                    socket.emit('messageError', 'حدث خطأ غير متوقع أثناء حذف الرسالة. الرجاء المحاولة لاحقاً.');
+                    socket.emit('messageError', 'حدث خطأ غير متوقع أثناء حذف الرسالة. الرجاء المحاولة لاحق.');
                 }
             });
             // New Socket.IO Event: Edit Message
@@ -357,7 +358,7 @@ app.prepare().then(() => {
                         return;
                     }
                     if (trimmedContent.length > 1000) {
-                        socket.emit('messageError', 'الرسالة طويلة جداً (الحد الأقصى 1000 حرف).');
+                        socket.emit('messageError', 'الرسالة طويلة (الحد الأقصى 1000 حرف).');
                         return;
                     }
                     let userId;
@@ -390,7 +391,7 @@ app.prepare().then(() => {
                 }
                 catch (error) {
                     console.error(`Socket ${socket.id}: Server error editing message:`, error);
-                    socket.emit('messageError', 'حدث خطأ غير متوقع أثناء تعديل الرسالة. الرجاء المحاولة لاحقاً.');
+                    socket.emit('messageError', 'حدث خطأ غير متوقع أثناء تعديل الرسالة. الرجاء المحاولة لاحق.');
                 }
             });
             socket.on('typing', (groupId, isTyping) => {

@@ -5,8 +5,19 @@ import dbConnect from './db';
 
 export async function getGroups() {
   try {
-    const connection = await dbConnect(); // استدعاء معدل
-    const groups = await Group.find({}).populate('members.userId', 'name avatar');
+    const connection = await dbConnect();
+    
+    // جلب المجموعات بدون populate
+    const groups = await Group.find({}).lean();
+    
+    // إذا كنت بحاجة إلى معلومات الأعضاء، يمكنك استخدام GroupMember
+    // const groupsWithMembers = await Promise.all(groups.map(async (group) => {
+    //   const members = await GroupMember.find({ group: group._id })
+    //     .populate('user', 'name avatar')
+    //     .lean();
+    //   return { ...group, members };
+    // }));
+    
     return JSON.parse(JSON.stringify(groups));
   } catch (error) {
     console.error('Error fetching groups:', error);
@@ -26,3 +37,4 @@ export async function getGroupMessages(groupId: string) {
     return { messages: [] };
   }
 }
+

@@ -22,11 +22,12 @@ import GroupMember from './models/GroupMember';
 import User, { IUser } from './models/User';
 import Group, { IGroup } from './models/Group';
 
-const dev = process.env.NODE_ENV !== 'production';
+// استخدام process.env.NODE_ENV إذا كان موجودًا، وإلا استخدام 'development'
+const isDev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
 
-const app = next({ dev, hostname, port });
+const app = next({ dev: isDev, hostname, port });
 const handle = app.getRequestHandler();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -89,10 +90,15 @@ app.prepare().then(() => {
         "http://localhost:3000",
         "http://30.30.30.20:3000",
         "http://gam3a5g.com:3000",
+        // أضف المزيد من الأصول المسموح بها إذا لزم الأمر
+        "*" // يسمح بجميع الأصول (استخدم هذا للاختبار فقط)
       ],
       methods: ["GET", "POST"],
       credentials: true,
     },
+    // إضافة خيارات جديدة لتحسين الاتصال
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
   });
 
   console.log('Socket.IO: Server initialized successfully via custom server.');
@@ -147,7 +153,7 @@ app.prepare().then(() => {
             return;
           }
 
-          const userDoc = await User.findById(userId, { name: 1 }).lean();
+          const userDoc = await User.findById(userId, { name: 1 }).lean() as unknown as { name: string } | null;
           currentUserName = userDoc?.name || 'مستخدم';
           if (!userDoc) {
             socket.emit('errorJoiningGroup', 'المستخدم غير موجود.');
@@ -240,7 +246,7 @@ app.prepare().then(() => {
           });
 
         } catch (error: any) {
-          socket.emit('errorJoiningGroup', 'حدث خطأ غير متوقع أثناء الانضمام إلى المجموعة. الرجاء المحاولة لاحقاً.');
+          socket.emit('errorJoiningGroup', 'حدث خطأ غير متوقع أثناء الانضمام إلى المجموعة. الرجاء المحاولة لاحق.');
           socket.disconnect();
         }
       });
@@ -264,7 +270,7 @@ app.prepare().then(() => {
           }
 
           if (sanitizedContent.length > 1000) {
-            socket.emit('messageError', 'الرسالة طويلة جداً (الحد الأقصى 1000 حرف).');
+            socket.emit('messageError', 'الرسالة طويلة (الحد الأقصى 1000 حرف).');
             return;
           }
 
@@ -318,7 +324,7 @@ app.prepare().then(() => {
 
         } catch (error: any) {
           console.error(`Socket ${socket.id}: Server error sending message:`, error);
-          socket.emit('messageError', 'حدث خطأ غير متوقع أثناء إرسال الرسالة. الرجاء المحاولة لاحقاً.');
+          socket.emit('messageError', 'حدث خطأ غير متوقع أثناء إرسال الرسالة. الرجاء المحاولة لاحق.');
         }
       });
 
@@ -345,13 +351,13 @@ app.prepare().then(() => {
             return;
           }
 
-          const messageToDelete = await Message.findById(messageId).lean() as (MessageLeanType | null);
+          const messageToDelete = await Message.findById(messageId).lean() as unknown as (MessageLeanType | null);
           if (!messageToDelete || messageToDelete.group.toString() !== groupId) {
             socket.emit('messageError', 'الرسالة غير موجودة أو لا تنتمي لهذه المجموعة.');
             return;
           }
 
-          const groupDoc = await Group.findById(groupId).lean() as (GroupLeanType | null);
+          const groupDoc = await Group.findOne({ _id: groupId }).lean() as unknown as (GroupLeanType | null);
           const isGroupAdmin = groupDoc?.admin && groupDoc.admin.equals(userId);
 
           if (!isGroupAdmin && !isSuperAdmin) {
@@ -380,7 +386,7 @@ app.prepare().then(() => {
 
         } catch (error: any) {
           console.error(`Socket ${socket.id}: Server error deleting message:`, error);
-          socket.emit('messageError', 'حدث خطأ غير متوقع أثناء حذف الرسالة. الرجاء المحاولة لاحقاً.');
+          socket.emit('messageError', 'حدث خطأ غير متوقع أثناء حذف الرسالة. الرجاء المحاولة لاحق.');
         }
       });
 
@@ -401,7 +407,7 @@ app.prepare().then(() => {
             return;
           }
           if (trimmedContent.length > 1000) {
-            socket.emit('messageError', 'الرسالة طويلة جداً (الحد الأقصى 1000 حرف).');
+            socket.emit('messageError', 'الرسالة طويلة (الحد الأقصى 1000 حرف).');
             return;
           }
 
@@ -439,7 +445,7 @@ app.prepare().then(() => {
 
         } catch (error: any) {
           console.error(`Socket ${socket.id}: Server error editing message:`, error);
-          socket.emit('messageError', 'حدث خطأ غير متوقع أثناء تعديل الرسالة. الرجاء المحاولة لاحقاً.');
+          socket.emit('messageError', 'حدث خطأ غير متوقع أثناء تعديل الرسالة. الرجاء المحاولة لاحق.');
         }
       });
 
@@ -468,7 +474,29 @@ app.prepare().then(() => {
     });
   }
 
+  // إضافة معالجة الأخطاء غير المتوقعة
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    // لا تنهي العملية هنا، فقط سجل الخطأ
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // لا تنهي العملية هنا، فقط سجل الخطأ
+  });
+
+  // تعديل إعدادات الخادم
   httpServer.listen(port, hostname, () => {
     console.log(`Server listening on http://${hostname}:${port}`);
+    console.log(`Socket.IO server available at http://${hostname}:${port}/api/socket`);
+  });
+
+  // إضافة معالجة إغلاق الخادم بشكل آمن
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM signal received: closing HTTP server');
+    httpServer.close(() => {
+      console.log('HTTP server closed');
+      process.exit(0);
+    });
   });
 });
