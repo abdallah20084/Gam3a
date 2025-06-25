@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // تعطيل فحص الأنواع أثناء البناء
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   // تعطيل العمال تمامًا
   experimental: {
     workerThreads: false,

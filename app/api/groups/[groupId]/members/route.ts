@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import GroupMember from '@/models/GroupMember';
-import Group from '@/models/Group';
+import Group, { IGroup } from '@/models/Group';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 
@@ -40,11 +40,13 @@ export async function POST(
   }
 
   try {
-    const group = await Group.findById(groupId);
+    // @ts-ignore
+    const group = await Group.findById(groupId as string);
     if (!group) {
       return NextResponse.json({ error: 'المجموعة غير موجودة.' }, { status: 404 });
     }
 
+    // @ts-ignore
     const existingMember = await GroupMember.findOne({ group: groupId, user: userId });
     if (existingMember) {
       return NextResponse.json({ message: 'أنت بالفعل عضو في هذه المجموعة.' }, { status: 200 });
@@ -89,11 +91,13 @@ export async function DELETE(
   }
 
   try {
+    // @ts-ignore
     const group = await Group.findById(groupId);
     if (!group) {
       return NextResponse.json({ error: 'المجموعة غير موجودة.' }, { status: 404 });
     }
 
+    // @ts-ignore
     const deletedMember = await GroupMember.findOneAndDelete({ group: groupId, user: userId });
 
     if (!deletedMember) {

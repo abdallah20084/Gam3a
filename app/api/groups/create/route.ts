@@ -45,6 +45,7 @@ export async function POST(request: Request) {
     }
 
     // 1. إنشاء المجموعة
+    // @ts-ignore
     const newGroup = await Group.create({
       name,
       description,

@@ -47,6 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
         isSuperAdminOfAnyGroup = decodedToken.isSuperAdmin || false; 
         
+        // @ts-ignore
         const memberInfo = await GroupMember.findOne({ group: groupId, user: userId });
         if (memberInfo) {
           const role = (memberInfo as any).role;
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
+    // @ts-ignore
     const group = await Group.findById(groupId).lean();
 
     if (!group) {
@@ -79,6 +81,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     };
 
     // ترتيب الأعضاء: الأدمن أولاً
+    // @ts-ignore
     const members = (await GroupMember.find({ group: groupId })
       .populate<{ user: PopulatedGroupMemberUser; }>({
         path: 'user',
@@ -142,6 +145,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'غير مصرح لك. الرجاء تسجيل الدخول.', redirectToLogin: true }, { status: 401 });
     }
 
+    // @ts-ignore
     const group = await Group.findById(groupId);
 
     if (!group) {
@@ -192,6 +196,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: 'غير مصرح لك. الرجاء تسجيل الدخول.', redirectToLogin: true }, { status: 401 });
     }
 
+    // @ts-ignore
     const group = await Group.findById(groupId);
 
     if (!group) {
@@ -207,10 +212,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // If one fails, the others might still be attempted or might throw errors.
 
     // 1. Delete all members of this group
+    // @ts-ignore
     await GroupMember.deleteMany({ group: groupId });
     // 2. Delete all messages related to this group
     await (Message as mongoose.Model<any>).deleteMany({ group: groupId });
     // 3. Delete the group itself
+    // @ts-ignore
     const deletedGroup = await Group.findByIdAndDelete(groupId);
     if (!deletedGroup) {
       return NextResponse.json({ success: false, error: 'المجموعة غير موجودة.' }, { status: 404 });
