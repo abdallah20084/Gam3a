@@ -18,7 +18,6 @@ export default function Error({
 
   return (
     <div className="min-vh-100 d-flex flex-column">
-      <Navbar />
       <main className="flex-grow-1 d-flex flex-column justify-content-center align-items-center">
         <div className="text-center">
           <h2 className="mb-4">حدث خطأ ما</h2>

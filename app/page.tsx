@@ -4,7 +4,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
-import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
@@ -269,7 +268,7 @@ export default function HomePage({
               <div key={group.id} className="col-12 col-md-6 col-lg-3">
                 <div className="card h-100 shadow-sm border-0 position-relative">
                   {/* زر القائمة المنسدلة */}
-                  {group.isOwner && (
+                  {group.isAdmin && (
                     <div className="position-absolute top-0 end-0 m-2">
                       <div className="dropdown">
                         <button 
@@ -331,7 +330,7 @@ export default function HomePage({
                     <div className="d-flex gap-2">
                       <button 
                         className="btn btn-outline-danger flex-grow-1"
-                        onClick={() => handleJoinGroup(group.id)}
+                        onClick={() => handleJoinLeaveGroup(group.id, group.isMember ? 'leave' : 'join')}
                         disabled={group.isMember}
                       >
                         {group.isMember ? 'مغادرة المجموعة' : 'مشاركة المجموعة'}

@@ -8,7 +8,6 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-// import Navbar from '@/components/Navbar';
 
 const formSchema = z.object({
   name: z.string().min(3, 'الاسم يجب أن يتكون من 3 أحرف على الأقل.'),

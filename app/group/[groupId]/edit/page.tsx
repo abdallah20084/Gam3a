@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
+// import Navbar from '@/components/Navbar';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import axios from 'axios';
@@ -154,7 +154,6 @@ export default function EditGroupPage() {
   if (error && !group) {
     return (
       <div className="min-vh-100 d-flex flex-column">
-        <Navbar />
         <main className="flex-grow-1 py-5 container">
           <ErrorMessage message={error} />
           <button
@@ -171,7 +170,6 @@ export default function EditGroupPage() {
   if (!group) {
     return (
       <div className="min-vh-100 d-flex flex-column">
-        <Navbar />
         <main className="flex-grow-1 py-5 container">
           <p className="text-center text-danger fs-5">المجموعة غير متوفرة أو حدث خطأ أثناء تحميلها.</p>
         </main>
@@ -249,4 +247,5 @@ export default function EditGroupPage() {
     </div>
   );
 }
+
 

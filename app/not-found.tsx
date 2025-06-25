@@ -1,10 +1,8 @@
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
 
 export default function NotFound() {
   return (
     <div className="min-vh-100 d-flex flex-column">
-      <Navbar />
       <main className="flex-grow-1 d-flex flex-column justify-content-center align-items-center">
         <div className="text-center">
           <h1 className="display-1 fw-bold">404</h1>
