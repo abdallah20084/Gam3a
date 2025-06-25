@@ -8,6 +8,8 @@ export interface IMessage extends Document {
   content: string; // محتوى الرسالة
   type: string; // نوع الرسالة
   timestamp: Date; // تاريخ ووقت إرسال الرسالة
+  reactions?: { emoji: string; users: mongoose.Types.ObjectId[] }[];
+  replyTo?: mongoose.Types.ObjectId | null;
   // يمكنك إضافة حقول أخرى هنا مثل: type (text, image, video), attachments, readBy, etc.
 }
 
@@ -36,6 +38,17 @@ const MessageSchema: Schema = new Schema({
   timestamp: {
     type: Date,
     default: Date.now,
+  },
+  reactions: [
+    {
+      emoji: { type: String, required: true },
+      users: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    }
+  ],
+  replyTo: {
+    type: Schema.Types.ObjectId,
+    ref: 'Message',
+    default: null,
   },
 });
 

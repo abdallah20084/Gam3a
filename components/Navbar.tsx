@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import Script from 'next/script';
 
+// تعريف window.bootstrap لتجنب أخطاء TypeScript
+declare global {
+  interface Window {
+    bootstrap: any;
+  }
+}
+
 export default function Navbar() {
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -45,13 +52,6 @@ export default function Navbar() {
   // تحميل جافاسكريبت البوتستراب لدعم القوائم المنسدلة والـ collapse
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // تعريف window.bootstrap لتجنب أخطاء TypeScript
-      declare global {
-        interface Window {
-          bootstrap: any;
-        }
-      }
-      
       // استخدام dynamic import مع معالجة الأخطاء
       import('bootstrap/dist/js/bootstrap.bundle.min.js')
         .then(() => {
@@ -122,6 +122,12 @@ export default function Navbar() {
             
             <li className="nav-item">
               <Link href="/features" className="nav-link shadow-hover fw-bold fs-4 text-dark">مميزات التطبيق</Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/media-processing" className="nav-link shadow-hover fw-bold fs-4 text-dark">معالجة الوسائط</Link>
+            </li>
+            <li className="nav-item">
+              <Link href="/test-upload" className="nav-link shadow-hover fw-bold fs-4 text-dark">اختبار الرفع</Link>
             </li>
             {isLoggedIn && (
               <>
@@ -261,33 +267,6 @@ export default function Navbar() {
         </div>
       </div>
     </nav>
-    <style jsx global>{`
-      .shadow-hover:hover, .shadow-hover:focus {
-        box-shadow: 0 2px 12px 0 rgba(0,0,0,0.12), 0 1.5px 4px 0 rgba(0,0,0,0.10);
-        background: #f6f8fa;
-        text-decoration: none !important;
-      }
-      .navbar .nav-link, .navbar .btn, .dropdown-item {
-        text-decoration: none !important;
-        transition: box-shadow 0.2s, background 0.2s;
-      }
-      .navbar .nav-link,
-      .navbar .dropdown-item {
-        color: #222 !important;
-      }
-      /* تأثير مختلف للأزرار المهمة */
-      .btn-glow:hover, .btn-glow:focus {
-        box-shadow: 0 0 0 0.25rem rgba(13,110,253,.15) !important;
-        background: #f0f4ff !important;
-        filter: brightness(1.05);
-      }
-      .btn-danger.btn-glow:hover, .btn-danger.btn-glow:focus,
-      .dropdown-item.text-danger.btn-glow:hover, .dropdown-item.text-danger.btn-glow:focus {
-        background: #ffebee !important;
-        color: #c00 !important;
-        box-shadow: 0 0 0 0.25rem rgba(220,53,69,.12) !important;
-      }
-    `}</style>
     {/* تحميل Bootstrap JS */}
     <BootstrapScript />
     </>

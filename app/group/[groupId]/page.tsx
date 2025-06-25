@@ -8,6 +8,8 @@ import ErrorMessage from '@/components/ErrorMessage';
 import { io, Socket } from 'socket.io-client';
 import DOMPurify from 'isomorphic-dompurify';
 import { FaPaperclip, FaRegSmile, FaImage, FaVideo, FaFileAlt } from 'react-icons/fa';
+import Picker from '@emoji-mart/react';
+import data from '@emoji-mart/data';
 
 const SOCKET_SERVER_URL = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:3000';
 
@@ -21,6 +23,8 @@ interface ServerToClientEvents {
   userStatusUpdate: (data: { userId: string; isOnline: boolean }) => void;
   messageDeleted: (data: { messageId: string; systemMessage: Message }) => void;
   messageEdited: (data: { messageId: string; newContent: string; isEdited: boolean }) => void;
+  reactionAdded: (data: { messageId: string; emoji: string; userId: string; reactions: { emoji: string; users: string[] }[] }) => void;
+  reactionRemoved: (data: { messageId: string; emoji: string; userId: string; reactions: { emoji: string; users: string[] }[] }) => void;
 }
 
 interface ClientToServerEvents {
@@ -29,6 +33,8 @@ interface ClientToServerEvents {
   typing: (groupId: string, isTyping: boolean) => void;
   deleteMessage: (data: { messageId: string; groupId: string; token: string }) => void;
   editMessage: (data: { messageId: string; groupId: string; newContent: string; token: string }) => void;
+  addReaction: (data: { messageId: string; groupId: string; emoji: string; token: string }) => void;
+  removeReaction: (data: { messageId: string; groupId: string; emoji: string; token: string }) => void;
 }
 
 type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -64,6 +70,8 @@ interface Message {
   senderAvatar?: string | null; 
   isSystemMessage?: boolean; 
   isEdited?: boolean; 
+  reactions?: { emoji: string; users: string[] }[];
+  replyTo?: string;
 }
 
 export default function GroupChatPage() {
@@ -91,6 +99,9 @@ export default function GroupChatPage() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
+  const [replyToMsg, setReplyToMsg] = useState<Message | null>(null);
 
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const socketRef = useRef<AppSocket | null>(null);
@@ -295,6 +306,22 @@ export default function GroupChatPage() {
       );
     };
 
+    const onReactionAdded = (data: { messageId: string; emoji: string; userId: string; reactions: { emoji: string; users: string[] }[] }) => {
+      setMessages(prev => prev.map(msg =>
+        msg.id === data.messageId
+          ? { ...msg, reactions: data.reactions }
+          : msg
+      ));
+    };
+
+    const onReactionRemoved = (data: { messageId: string; emoji: string; userId: string; reactions: { emoji: string; users: string[] }[] }) => {
+      setMessages(prev => prev.map(msg =>
+        msg.id === data.messageId
+          ? { ...msg, reactions: data.reactions }
+          : msg
+      ));
+    };
+
     socket.on('connect', onConnect);
     socket.on('connect_error', onConnectError);
     socket.on('disconnect', onDisconnect);
@@ -304,6 +331,8 @@ export default function GroupChatPage() {
     socket.on('userStatusUpdate', onUserStatusUpdate);
     socket.on('messageDeleted', onMessageDeleted);
     socket.on('messageEdited', onMessageEdited);
+    socket.on('reactionAdded', onReactionAdded);
+    socket.on('reactionRemoved', onReactionRemoved);
     socket.on('authError', (msg) => handleSocketError(msg, 'authentication'));
     socket.on('messageError', (msg) => handleSocketError(msg, 'message sending'));
     socket.on('errorJoiningGroup', (msg) => handleSocketError(msg, 'group join'));
@@ -322,6 +351,8 @@ export default function GroupChatPage() {
       socket.off('userStatusUpdate', onUserStatusUpdate);
       socket.off('messageDeleted', onMessageDeleted);
       socket.off('messageEdited', onMessageEdited);
+      socket.off('reactionAdded', onReactionAdded);
+      socket.off('reactionRemoved', onReactionRemoved);
       socket.off('authError', (msg) => handleSocketError(msg, 'authentication'));
       socket.off('messageError', (msg) => handleSocketError(msg, 'message sending'));
       socket.off('errorJoiningGroup', (msg) => handleSocketError(msg, 'group join'));
@@ -352,10 +383,12 @@ export default function GroupChatPage() {
       content: sanitizedContent,
       token: token,
       type: 'text',
+      ...(replyToMsg ? { replyTo: replyToMsg.id } : {}),
     });
     setNewMessage('');
+    setReplyToMsg(null);
     handleTyping(false); 
-  }, [newMessage, group, handleTyping, handleSocketError]);
+  }, [newMessage, group, handleTyping, handleSocketError, replyToMsg]);
 
   const startEditing = useCallback((message: Message) => {
     setEditingMessageId(message.id);
@@ -503,6 +536,32 @@ export default function GroupChatPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [previewImage]);
 
+  const handleReact = (msgId: string, emoji: string) => {
+    if (!socketRef.current || !group) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const msg = messages.find(m => m.id === msgId);
+    const currentUserId = localStorage.getItem('userId');
+    const reaction = msg?.reactions?.find(r => r.emoji === emoji);
+    const hasReacted = reaction && currentUserId && reaction.users.includes(currentUserId);
+    if (hasReacted) {
+      socketRef.current.emit('removeReaction', {
+        messageId: msgId,
+        groupId: group.id,
+        emoji,
+        token,
+      });
+    } else {
+      socketRef.current.emit('addReaction', {
+        messageId: msgId,
+        groupId: group.id,
+        emoji,
+        token,
+      });
+    }
+    setActiveReactionMsgId(null);
+  };
+
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center min-vh-100">
@@ -608,7 +667,7 @@ export default function GroupChatPage() {
               ) : (
                 filteredMessages.map((msg, idx) => (
                   <div key={idx} className={`d-flex mb-3 ${msg.sender === group.adminId ? 'justify-content-end' : ''}`} style={{ alignItems: 'flex-end' }}>
-                    <img src={msg.senderAvatar || '/default-avatar.png'} className="rounded-circle me-2" width={40} height={40} alt="avatar" />
+                    <img src={msg.senderAvatar || '/default-avatar.png'} className="rounded-circle me-2" style={{ width: 40, height: 40 }} alt="avatar" />
                     <div>
                       <div className="fw-bold small d-flex align-items-center gap-2">
                         {msg.type === 'image' && <FaImage className="text-info" />}
@@ -639,6 +698,44 @@ export default function GroupChatPage() {
                         })()}
                       </div>
                       <div className="text-muted small text-end mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</div>
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div className="d-flex gap-2 mt-1">
+                          {msg.reactions.map(r => (
+                            <span key={r.emoji} style={{ fontSize: 18, cursor: 'pointer' }}>
+                              {r.emoji} {r.users.length}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        className="btn btn-sm btn-light ms-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveReactionMsgId(msg.id);
+                        }}
+                        style={{ borderRadius: '50%' }}
+                        title="تفاعل مع الرسالة"
+                      >😊</button>
+                      {activeReactionMsgId === msg.id && (
+                        <div className="reaction-picker" style={{ position: 'absolute', zIndex: 1000, background: '#fff', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', padding: 8, right: 0, bottom: 30 }}>
+                          {['👍','❤️','😂','😮','😢','😡'].map(emoji => (
+                            <span
+                              key={emoji}
+                              style={{ fontSize: 22, margin: 4, cursor: 'pointer' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReact(msg.id, emoji);
+                              }}
+                            >{emoji}</span>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        className="btn btn-sm btn-outline-secondary ms-2"
+                        style={{ borderRadius: '50%' }}
+                        title="رد على الرسالة"
+                        onClick={() => setReplyToMsg(msg)}
+                      >💬</button>
                     </div>
                   </div>
                 ))
@@ -647,7 +744,16 @@ export default function GroupChatPage() {
             <div ref={messagesEndRef} />
           </div>
           {/* مربع كتابة الرسالة */}
-          <div className="input-group mt-3 align-items-center">
+          <div className="input-group mt-3 align-items-center" style={{ position: 'relative' }}>
+            {replyToMsg && (
+              <div className="alert alert-info py-2 px-3 mb-2 d-flex align-items-center justify-content-between" style={{ borderRadius: 12 }}>
+                <div>
+                  <span className="fw-bold">ترد على: {replyToMsg.senderName || 'مستخدم'}</span>
+                  <div className="small text-muted">{replyToMsg.content?.slice(0, 40)}{replyToMsg.content?.length > 40 ? '...' : ''}</div>
+                </div>
+                <button className="btn btn-sm btn-link text-danger" onClick={() => setReplyToMsg(null)}>إلغاء</button>
+              </div>
+            )}
             <input
               type="text"
               className="form-control"
@@ -658,6 +764,28 @@ export default function GroupChatPage() {
               disabled={!isConnected}
               style={{ borderRadius: '20px' }}
             />
+            <button
+              type="button"
+              className="btn btn-light mb-0 ms-2"
+              title="إدراج إيموجي"
+              style={{ borderRadius: '50%' }}
+              onClick={() => setShowEmoji((v) => !v)}
+            >
+              😊
+            </button>
+            {showEmoji && (
+              <div style={{ position: 'absolute', bottom: 55, right: 60, zIndex: 1000 }}>
+                <Picker
+                  data={data}
+                  onEmojiSelect={(emoji) => {
+                    setNewMessage((msg) => msg + (emoji.native || emoji.shortcodes || ''));
+                    setShowEmoji(false);
+                  }}
+                  locale="ar"
+                  theme="light"
+                />
+              </div>
+            )}
             <label className="btn btn-light mb-0 ms-2" title="إرفاق صورة/فيديو" style={{ borderRadius: '50%' }}>
               <FaPaperclip size={20} />
               <input type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={handleFileChange} />
@@ -671,7 +799,7 @@ export default function GroupChatPage() {
         <div className="col-lg-4 col-md-5 col-12 order-1 order-lg-2">
           <div className="bg-white rounded shadow-sm p-4 mb-3">
             <div className="d-flex align-items-center mb-3 position-relative">
-              <img src={group.coverImageUrl || '/default-group.png'} className="rounded-circle me-3" width={56} height={56} alt="group" />
+              <img src={group.coverImageUrl || '/default-group.png'} className="rounded-circle me-3" style={{ width: 56, height: 56 }} alt="group" />
               <div>
                 <div className="fw-bold d-flex align-items-center gap-2">
                   {group.name}
@@ -721,7 +849,7 @@ export default function GroupChatPage() {
             <ul className="list-unstyled">
               {group.members && group.members.length > 0 ? group.members.map((member: any, idx: number) => (
                 <li key={idx} className="d-flex align-items-center mb-2 position-relative">
-                  <img src={member.avatar || '/default-avatar.png'} className="rounded-circle me-2" width={32} height={32} alt={member.name} />
+                  <img src={member.avatar || '/default-avatar.png'} className="rounded-circle me-2" style={{ width: 32, height: 32 }} alt={member.name} />
                   <span
                     className={onlineUsers.has(member.id) ? 'online-indicator' : 'offline-indicator'}
                     style={{
@@ -802,13 +930,6 @@ export default function GroupChatPage() {
     </div>
   );
 }
-
-/*
-.admin-dropdown-toggle:hover, .admin-dropdown-toggle:focus {
-  background: #e0e7ff !important;
-  color: #222 !important;
-}
-*/
 
 
 

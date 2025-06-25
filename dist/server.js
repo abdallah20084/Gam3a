@@ -200,6 +200,7 @@ app.prepare().then(() => {
                         }
                     }
                     const formattedOldMessages = oldMessages.map((msg) => {
+                        var _a;
                         // تأكد أن sender هو object وفيه name وavatar
                         const sender = (typeof msg.sender === 'object' && msg.sender && 'name' in msg.sender)
                             ? msg.sender
@@ -214,6 +215,7 @@ app.prepare().then(() => {
                             timestamp: msg.timestamp.toISOString(),
                             isEdited: false,
                             type: msg.type || 'text',
+                            replyTo: (_a = msg.replyTo) === null || _a === void 0 ? void 0 : _a.toString(),
                         };
                     });
                     socket.emit('joinedGroup', {
@@ -229,7 +231,7 @@ app.prepare().then(() => {
             socket.on('sendMessage', async (data) => {
                 try {
                     await (0, db_1.default)();
-                    const { groupId, content, token, type } = data;
+                    const { groupId, content, token, type, replyTo } = data;
                     if (!mongoose_1.default.Types.ObjectId.isValid(groupId)) {
                         socket.emit('messageError', 'معرف مجموعة غير صالح لإرسال الرسالة.');
                         return;
@@ -266,6 +268,7 @@ app.prepare().then(() => {
                         sender: userId,
                         content: sanitizedContent,
                         type: type || 'text',
+                        replyTo: replyTo || null,
                     });
                     await newMessage.save();
                     const senderUser = await User_1.default.findById(userId, { name: 1, avatar: 1 }).lean();
@@ -284,6 +287,7 @@ app.prepare().then(() => {
                         timestamp: newMessage.timestamp.toISOString(),
                         isEdited: false,
                         type: newMessage.type,
+                        replyTo: newMessage.replyTo ? newMessage.replyTo.toString() : undefined,
                     };
                     io.to(groupId).emit('receiveMessage', messageToSend);
                     console.log(`Socket ${socket.id}: Message sent to group ${groupId} by user ${userId}`);
@@ -419,6 +423,123 @@ app.prepare().then(() => {
                     }
                     connectedUsers.delete(socket.id);
                     console.log(`Socket.IO: Client disconnected - ID: ${socket.id}`);
+                }
+            });
+            // إضافة حدث تفاعل مع الرسالة
+            socket.on('addReaction', async (data) => {
+                try {
+                    await (0, db_1.default)();
+                    const { messageId, groupId, emoji, token } = data;
+                    if (!mongoose_1.default.Types.ObjectId.isValid(messageId) || !mongoose_1.default.Types.ObjectId.isValid(groupId)) {
+                        socket.emit('messageError', 'معرف رسالة أو مجموعة غير صالح للتفاعل.');
+                        return;
+                    }
+                    let userId;
+                    try {
+                        const decodedToken = jwt.verify(token, JWT_SECRET);
+                        userId = new mongoose_1.default.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
+                        currentUserId = userId.toString();
+                    }
+                    catch (jwtError) {
+                        socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية للتفاعل.');
+                        return;
+                    }
+                    const isMember = await GroupMember_1.default.exists({ group: groupId, user: userId });
+                    if (!isMember) {
+                        socket.emit('messageError', 'غير مصرح لك بالتفاعل في هذه المجموعة.');
+                        return;
+                    }
+                    const message = await Message_1.default.findById(messageId);
+                    if (!message || message.group.toString() !== groupId) {
+                        socket.emit('messageError', 'الرسالة غير موجودة أو لا تنتمي لهذه المجموعة.');
+                        return;
+                    }
+                    // تحديث reactions: إذا كان هناك reaction بنفس الإيموجي أضف userId إذا لم يكن موجودًا
+                    let updated = false;
+                    if (!message.reactions)
+                        message.reactions = [];
+                    const idx = message.reactions.findIndex(r => r.emoji === emoji);
+                    if (idx > -1) {
+                        if (!message.reactions[idx].users.some(u => u.equals(userId))) {
+                            message.reactions[idx].users.push(userId);
+                            updated = true;
+                        }
+                    }
+                    else {
+                        message.reactions.push({ emoji, users: [userId] });
+                        updated = true;
+                    }
+                    if (updated) {
+                        await message.save();
+                        io.to(groupId).emit('reactionAdded', {
+                            messageId,
+                            emoji,
+                            userId: userId.toString(),
+                            reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
+                        });
+                    }
+                }
+                catch (error) {
+                    console.error('Error in addReaction:', error);
+                    socket.emit('messageError', 'حدث خطأ أثناء إضافة التفاعل.');
+                }
+            });
+            // إضافة حدث إزالة التفاعل مع الرسالة
+            socket.on('removeReaction', async (data) => {
+                try {
+                    await (0, db_1.default)();
+                    const { messageId, groupId, emoji, token } = data;
+                    if (!mongoose_1.default.Types.ObjectId.isValid(messageId) || !mongoose_1.default.Types.ObjectId.isValid(groupId)) {
+                        socket.emit('messageError', 'معرف رسالة أو مجموعة غير صالح لإزالة التفاعل.');
+                        return;
+                    }
+                    let userId;
+                    try {
+                        const decodedToken = jwt.verify(token, JWT_SECRET);
+                        userId = new mongoose_1.default.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
+                        currentUserId = userId.toString();
+                    }
+                    catch (jwtError) {
+                        socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية لإزالة التفاعل.');
+                        return;
+                    }
+                    const isMember = await GroupMember_1.default.exists({ group: groupId, user: userId });
+                    if (!isMember) {
+                        socket.emit('messageError', 'غير مصرح لك بإزالة التفاعل في هذه المجموعة.');
+                        return;
+                    }
+                    const message = await Message_1.default.findById(messageId);
+                    if (!message || message.group.toString() !== groupId) {
+                        socket.emit('messageError', 'الرسالة غير موجودة أو لا تنتمي لهذه المجموعة.');
+                        return;
+                    }
+                    if (!message.reactions)
+                        message.reactions = [];
+                    const idx = message.reactions.findIndex(r => r.emoji === emoji);
+                    let updated = false;
+                    if (idx > -1) {
+                        const userIdx = message.reactions[idx].users.findIndex(u => u.equals(userId));
+                        if (userIdx > -1) {
+                            message.reactions[idx].users.splice(userIdx, 1);
+                            if (message.reactions[idx].users.length === 0) {
+                                message.reactions.splice(idx, 1);
+                            }
+                            updated = true;
+                        }
+                    }
+                    if (updated) {
+                        await message.save();
+                        io.to(groupId).emit('reactionRemoved', {
+                            messageId,
+                            emoji,
+                            userId: userId.toString(),
+                            reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
+                        });
+                    }
+                }
+                catch (error) {
+                    console.error('Error in removeReaction:', error);
+                    socket.emit('messageError', 'حدث خطأ أثناء إزالة التفاعل.');
                 }
             });
         });

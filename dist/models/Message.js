@@ -61,6 +61,17 @@ const MessageSchema = new mongoose_1.Schema({
         type: Date,
         default: Date.now,
     },
+    reactions: [
+        {
+            emoji: { type: String, required: true },
+            users: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
+        }
+    ],
+    replyTo: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Message',
+        default: null,
+    },
 });
 // تصدير النموذج
 const Message = mongoose_1.default.models.Message || mongoose_1.default.model('Message', MessageSchema);
