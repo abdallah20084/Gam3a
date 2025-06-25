@@ -51,6 +51,7 @@ export async function POST(request: Request) {
       description,
       creator: userId,
       admin: userId, // المنشئ هو المدير تلقائ
+      memberCount: 1, // تعيين عدد الأعضاء 1 افتراضيًا
       // ازالة members و currentMembers من Group model إذا كنت ستعتمد على GroupMember
       // members: [userId],
       // currentMembers: 1,

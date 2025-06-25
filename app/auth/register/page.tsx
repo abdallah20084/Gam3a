@@ -47,13 +47,11 @@ export default function RegisterPage() {
             localStorage.removeItem('token');
             localStorage.removeItem('userId');
             localStorage.removeItem('userName');
-            localStorage.removeItem('isSuperAdmin');
           }
         } catch (err: any) {
           localStorage.removeItem('token');
           localStorage.removeItem('userId');
           localStorage.removeItem('userName');
-          localStorage.removeItem('isSuperAdmin');
         }
       }
     };
@@ -84,7 +82,6 @@ export default function RegisterPage() {
           localStorage.setItem('token', response.data.token);
           localStorage.setItem('userName', response.data.userName);
           localStorage.setItem('userId', response.data.userId);
-          localStorage.setItem('isSuperAdmin', response.data.isSuperAdmin ? 'true' : 'false');
         }
 
         setSuccessMessage(response.data.message || 'تم التسجيل بنجاح! جارٍ التوجيه...');

@@ -39,5 +39,6 @@ const GroupSchema = new mongoose_1.Schema({
     description: { type: String, trim: true },
     admin: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
     coverImageUrl: { type: String },
+    memberCount: { type: Number, default: 1 },
 }, { timestamps: true });
 exports.default = mongoose_1.default.models.Group || mongoose_1.default.model('Group', GroupSchema);

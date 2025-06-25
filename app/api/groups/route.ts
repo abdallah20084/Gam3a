@@ -90,17 +90,14 @@ export async function GET(req: NextRequest) {
 
   const token = req.headers.get('authorization')?.split(' ')[1];
   let currentUserId: mongoose.Types.ObjectId | null = null;
-  let isCurrentUserSuperAdmin = false;
 
   if (token) {
     try {
       const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string; isSuperAdmin?: boolean };
       currentUserId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
-      isCurrentUserSuperAdmin = decodedToken.isSuperAdmin || false;
     } catch (jwtError) {
       console.warn('Invalid token for fetching groups:', jwtError);
       currentUserId = null;
-      isCurrentUserSuperAdmin = false;
       if (tabType === 'joined' || tabType === 'myGroups') {
         return NextResponse.json({ error: 'جلسة غير صالحة. الرجاء تسجيل الدخول.', redirectToLogin: true }, { status: 401 });
       }
@@ -149,7 +146,7 @@ export async function GET(req: NextRequest) {
         if (currentUserId) {
           isMember = !!(await GroupMember.exists({ group: group._id, user: currentUserId }));
           isAdminOfThisGroup = group.admin.equals(currentUserId);
-          canEdit = isAdminOfThisGroup || isCurrentUserSuperAdmin;
+          canEdit = isAdminOfThisGroup;
         }
 
         return {

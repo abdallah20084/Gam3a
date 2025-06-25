@@ -21,7 +21,6 @@ export default function Navbar() {
     localStorage.removeItem('token');
     localStorage.removeItem('userName'); 
     localStorage.removeItem('userId');
-    localStorage.removeItem('isSuperAdmin');
     setIsLoggedIn(false);
     router.push('/auth/login');
   };
@@ -119,6 +118,10 @@ export default function Navbar() {
             </li>
             <li className="nav-item">
               <span className="fw-bold fs-4 text-muted px-2" style={{ cursor: 'not-allowed' }}>مطاعم قريبًا</span>
+            </li>
+            
+            <li className="nav-item">
+              <Link href="/features" className="nav-link shadow-hover fw-bold fs-4 text-dark">مميزات التطبيق</Link>
             </li>
             {isLoggedIn && (
               <>

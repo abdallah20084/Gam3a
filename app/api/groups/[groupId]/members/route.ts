@@ -98,16 +98,16 @@ export async function DELETE(
     }
 
     // @ts-ignore
-    const deletedMember = await GroupMember.findOneAndDelete({ group: groupId, user: userId });
+    const deletedMembers = await GroupMember.deleteMany({ group: groupId, user: { $in: req.body.userIds } });
 
-    if (!deletedMember) {
-      return NextResponse.json({ message: 'أنت لست عضواً في هذه المجموعة.' }, { status: 200 });
+    if (deletedMembers.deletedCount === 0) {
+      return NextResponse.json({ message: 'لم يتم حذف أي عضو من المجموعة.' }, { status: 200 });
     }
 
-    group.memberCount = Math.max(0, (group.memberCount || 0) - 1);
+    group.memberCount = Math.max(0, (group.memberCount || 0) - deletedMembers.deletedCount);
     await group.save();
 
-    return NextResponse.json({ message: 'تم مغادرة المجموعة بنجاح.' }, { status: 200 });
+    return NextResponse.json({ message: 'تم حذف الأعضاء من المجموعة بنجاح.' }, { status: 200 });
   } catch (error: any) {
     console.error('Error leaving group:', error);
     return NextResponse.json({ error: 'فشل مغادرة المجموعة.' }, { status: 500 });

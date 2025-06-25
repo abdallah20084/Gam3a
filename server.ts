@@ -52,6 +52,7 @@ interface FormattedMessage {
   timestamp: string;
   isSystemMessage?: boolean;
   isEdited?: boolean;
+  type: string;
 }
 
 type PopulatedMessageLean = Omit<IMessage, 'sender'> & {
@@ -141,11 +142,9 @@ app.prepare().then(() => {
           }
 
           let userId: mongoose.Types.ObjectId;
-          let isSuperAdmin = false;
           try {
-            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string; isSuperAdmin?: boolean };
+            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
-            isSuperAdmin = decodedToken.isSuperAdmin || false;
             currentUserId = userId.toString();
           } catch (jwtError: any) {
             socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية. الرجاء إعادة تسجيل الدخول.');
@@ -161,7 +160,7 @@ app.prepare().then(() => {
             return;
           }
           const isMember = await GroupMember.exists({ group: groupId, user: userId });
-          if (!isMember && !isSuperAdmin) {
+          if (!isMember) {
             socket.emit('errorJoiningGroup', 'غير مصرح لك بالانضمام إلى هذه المجموعة.');
             socket.disconnect();
             return;
@@ -237,6 +236,7 @@ app.prepare().then(() => {
               content: msg.content,
               timestamp: msg.timestamp.toISOString(),
               isEdited: false,
+              type: msg.type || 'text',
             };
           });
 
@@ -251,11 +251,11 @@ app.prepare().then(() => {
         }
       });
 
-      socket.on('sendMessage', async (data: { groupId: string; content: string; token: string }) => {
+      socket.on('sendMessage', async (data: { groupId: string; content: string; token: string; type?: string }) => {
         try {
           await connectDB();
 
-          const { groupId, content, token } = data;
+          const { groupId, content, token, type } = data;
 
           if (!mongoose.Types.ObjectId.isValid(groupId)) {
             socket.emit('messageError', 'معرف مجموعة غير صالح لإرسال الرسالة.');
@@ -275,11 +275,10 @@ app.prepare().then(() => {
           }
 
           let userId: mongoose.Types.ObjectId;
-          let isSuperAdmin = false;
           try {
-            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string; isSuperAdmin?: boolean };
+            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
-            isSuperAdmin = decodedToken.isSuperAdmin || false;
+            currentUserId = userId.toString();
           } catch (jwtError: any) {
             console.warn(`Socket ${socket.id}: Invalid token for sendMessage. Token Error: ${jwtError.message}`);
             socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية لإرسال الرسالة.');
@@ -287,8 +286,8 @@ app.prepare().then(() => {
           }
 
           const isMember = await GroupMember.exists({ group: groupId, user: userId });
-          if (!isMember && !isSuperAdmin) {
-            console.warn(`Socket ${socket.id}: User ${userId} is not a member of group ${groupId} and not super admin. Cannot send message.`);
+          if (!isMember) {
+            console.warn(`Socket ${socket.id}: User ${userId} is not a member of group ${groupId}. Cannot send message.`);
             socket.emit('messageError', 'غير مصرح لك بإرسال رسالة في هذه المجموعة.');
             return;
           }
@@ -297,6 +296,7 @@ app.prepare().then(() => {
             group: groupId,
             sender: userId,
             content: sanitizedContent,
+            type: type || 'text',
           });
           await newMessage.save();
 
@@ -317,6 +317,7 @@ app.prepare().then(() => {
             content: newMessage.content,
             timestamp: newMessage.timestamp.toISOString(),
             isEdited: false,
+            type: newMessage.type,
           };
 
           io!.to(groupId).emit('receiveMessage', messageToSend);
@@ -340,11 +341,10 @@ app.prepare().then(() => {
           }
 
           let userId: mongoose.Types.ObjectId;
-          let isSuperAdmin = false;
           try {
-            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string; isSuperAdmin?: boolean };
+            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
-            isSuperAdmin = decodedToken.isSuperAdmin || false;
+            currentUserId = userId.toString();
           } catch (jwtError: any) {
             console.warn(`Socket ${socket.id}: Invalid token for deleteMessage. Token Error: ${jwtError.message}`);
             socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية لحذف الرسالة.');
@@ -362,8 +362,8 @@ app.prepare().then(() => {
           const groupDoc = await Group.findOne({ _id: groupId });
           const isGroupAdmin = groupDoc?.admin && groupDoc.admin.equals(userId);
 
-          if (!isGroupAdmin && !isSuperAdmin) {
-            socket.emit('messageError', 'غير مصرح لك بحذف هذه الرسالة. فقط المدير أو السوبر أدمن يمكنه الحذف.');
+          if (!isGroupAdmin) {
+            socket.emit('messageError', 'غير مصرح لك بحذف هذه الرسالة. فقط المدير يمكنه الحذف.');
             return;
           }
 
@@ -382,6 +382,7 @@ app.prepare().then(() => {
             content: `قام ${deleterName} بحذف رسالة.`,
             timestamp: new Date().toISOString(),
             isSystemMessage: true,
+            type: 'system',
           };
 
           io!.to(groupId).emit('messageDeleted', { messageId, systemMessage });
@@ -417,6 +418,7 @@ app.prepare().then(() => {
           try {
             const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
+            currentUserId = userId.toString();
           } catch (jwtError: any) {
             console.warn(`Socket ${socket.id}: Invalid token for editMessage. Token Error: ${jwtError.message}`);
             socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية لتعديل الرسالة.');

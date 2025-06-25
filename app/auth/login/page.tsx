@@ -24,7 +24,6 @@ export default function LoginPage() {
         localStorage.removeItem('token');
         localStorage.removeItem('userId');
         localStorage.removeItem('userName');
-        localStorage.removeItem('isSuperAdmin');
       });
     }
   }, [router]);
@@ -46,7 +45,6 @@ export default function LoginPage() {
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('userName', response.data.userName);
         localStorage.setItem('userId', response.data.userId);
-        localStorage.setItem('isSuperAdmin', response.data.isSuperAdmin ? 'true' : 'false');
         router.push('/');
       } else if (response.data.redirectToVerify && response.data.phone) {
         setError(response.data.message || 'حسابك غير مفعل. الرجاء توجيهك لصفحة التحقق.');
@@ -87,7 +85,7 @@ export default function LoginPage() {
                 onChange={(e) => setPhone(e.target.value)}
                 required
                 placeholder="01XXXXXXXXX"
-                autoComplete="username"
+                autoComplete="phone"
               />
             </div>
             <div className="mb-4">

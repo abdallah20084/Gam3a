@@ -7,6 +7,7 @@ export interface IGroup extends Document {
   coverImageUrl?: string;
   createdAt: Date;
   updatedAt: Date;
+  memberCount: number;
 }
 
 const GroupSchema = new Schema<IGroup>(
@@ -15,6 +16,7 @@ const GroupSchema = new Schema<IGroup>(
     description: { type: String, trim: true },
     admin: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     coverImageUrl: { type: String },
+    memberCount: { type: Number, default: 1 },
   },
   { timestamps: true }
 );

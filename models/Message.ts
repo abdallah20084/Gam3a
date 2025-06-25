@@ -6,6 +6,7 @@ export interface IMessage extends Document {
   group: mongoose.Types.ObjectId; // معرف المجموعة التي تنتمي إليها الرسالة
   sender: mongoose.Types.ObjectId; // معرف المرسل
   content: string; // محتوى الرسالة
+  type: string; // نوع الرسالة
   timestamp: Date; // تاريخ ووقت إرسال الرسالة
   // يمكنك إضافة حقول أخرى هنا مثل: type (text, image, video), attachments, readBy, etc.
 }
@@ -26,6 +27,11 @@ const MessageSchema: Schema = new Schema({
     type: String,
     required: true,
     trim: true, // إزالة المسافات البيضاء الزائدة
+  },
+  type: {
+    type: String,
+    enum: ['text', 'image', 'video', 'file', 'pdf', 'system'],
+    default: 'text',
   },
   timestamp: {
     type: Date,

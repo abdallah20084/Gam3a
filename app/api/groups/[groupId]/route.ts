@@ -36,7 +36,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let userId: mongoose.Types.ObjectId | null = null;
     let isMember: boolean = false;
     let isAdmin: boolean = false;
-    let isSuperAdminOfAnyGroup: boolean = false;
     let currentUserRole: string = 'guest';
 
     const authHeader = request.headers.get('Authorization');
@@ -45,7 +44,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       try {
         const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string; isSuperAdmin?: boolean };
         userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
-        isSuperAdminOfAnyGroup = decodedToken.isSuperAdmin || false; 
         
         // @ts-ignore
         const memberInfo = await GroupMember.findOne({ group: groupId, user: userId });
@@ -69,7 +67,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: 'المجموعة غير موجودة.' }, { status: 404 });
     }
 
-    const canEdit = isAdmin || isSuperAdminOfAnyGroup;
+    const canEdit = isAdmin;
 
     type PopulatedGroupMemberUser = IUser & { _id: mongoose.Types.ObjectId };
     type PopulatedGroupMemberDoc = Omit<mongoose.Document & { user: PopulatedGroupMemberUser; role: string; joinedAt: Date; }, 'user'> & {
@@ -205,6 +203,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (!group.admin.equals(userId) && !isSuperAdmin) {
       return NextResponse.json({ success: false, error: 'ليس لديك صلاحية لحذف هذه المجموعة.' }, { status: 403 });
+    }
+
+    // تحقق من عدد الأعضاء الفعلي في GroupMember وليس فقط memberCount
+    const realMembersCount = await GroupMember.countDocuments({ group: groupId });
+    if (realMembersCount > 1) {
+      return NextResponse.json({ success: false, error: 'لا يمكنك حذف المجموعة إلا إذا كنت العضو الوحيد فيها.' }, { status: 403 });
     }
 
     // --- START: Removed Transaction Logic ---

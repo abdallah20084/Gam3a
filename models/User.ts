@@ -8,14 +8,13 @@ export interface IUser extends Document {
   isVerified?: boolean;
   avatar?: string;
   groups: mongoose.Types.ObjectId[]; // إضافة خاصية groups
-  // أي حقول أخرى...
   createdAt: Date;
   updatedAt: Date;
 }
 
 const UserSchema: Schema = new Schema({
   name: { type: String, required: true, trim: true },
-  email: { type: String, required: true, unique: true, trim: true },
+  phone: { type: String, required: true, unique: true, trim: true },
   password: { type: String, required: true },
   avatar: { type: String },
   groups: [{ type: Schema.Types.ObjectId, ref: 'Group' }],

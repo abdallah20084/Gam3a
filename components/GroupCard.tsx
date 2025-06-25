@@ -42,7 +42,7 @@ export default function GroupCard({ group }: GroupCardProps) {
           )}
         </Card.Text>
         <div className="d-flex justify-content-between align-items-center">
-          <small className="text-muted">{group.memberCount} أعضاء</small>
+          <small className="text-muted">{group.memberCount && group.memberCount > 0 ? group.memberCount : 1} أعضاء</small>
           <Link href={`/group/${group._id}`} passHref legacyBehavior>
             <Button variant="outline-primary" size="sm">
               عرض المجموعة

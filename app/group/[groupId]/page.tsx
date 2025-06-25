@@ -7,6 +7,7 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import { io, Socket } from 'socket.io-client';
 import DOMPurify from 'isomorphic-dompurify';
+import { FaPaperclip, FaRegSmile, FaImage, FaVideo, FaFileAlt } from 'react-icons/fa';
 
 const SOCKET_SERVER_URL = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:3000';
 
@@ -24,7 +25,7 @@ interface ServerToClientEvents {
 
 interface ClientToServerEvents {
   joinGroup: (groupId: string, token: string) => void;
-  sendMessage: (data: { groupId: string; content: string; token: string }) => void;
+  sendMessage: (data: { groupId: string; content: string; token: string; type?: string }) => void;
   typing: (groupId: string, isTyping: boolean) => void;
   deleteMessage: (data: { messageId: string; groupId: string; token: string }) => void;
   editMessage: (data: { messageId: string; groupId: string; newContent: string; token: string }) => void;
@@ -57,6 +58,7 @@ interface Message {
   groupId: string; 
   sender: string; 
   content: string; 
+  type: string;
   timestamp: string; 
   senderName?: string; 
   senderAvatar?: string | null; 
@@ -81,7 +83,14 @@ export default function GroupChatPage() {
   const [editingContent, setEditingContent] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isCurrentUserAdmin, setIsCurrentUserAdmin] = useState(false);
-  const [isCurrentUserSuperAdmin, setIsCurrentUserSuperAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chat' | 'images' | 'videos' | 'pdfs' | 'voices' | 'links' | 'members'>('chat');
+  const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
+  const [deleteGroupError, setDeleteGroupError] = useState<string | null>(null);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const socketRef = useRef<AppSocket | null>(null);
@@ -96,8 +105,6 @@ export default function GroupChatPage() {
     setError(null);
     try {
       const token = localStorage.getItem('token');
-      const superAdminStatus = localStorage.getItem('isSuperAdmin') === 'true';
-      setIsCurrentUserSuperAdmin(superAdminStatus);
 
       const response = await fetch(`/api/groups/${groupId}`, {
         headers: {
@@ -216,26 +223,18 @@ export default function GroupChatPage() {
 
     const onJoinedGroup = (data: { groupId: string; messages: Message[] }) => {
       setMessages(data.messages.map(msg => ({
-          id: msg.id,
-          groupId: msg.groupId,
-          sender: msg.sender, 
-          content: DOMPurify.sanitize(msg.content), 
-          timestamp: msg.timestamp,
-          senderName: group?.members.find(m => m.id === msg.sender)?.name || 'مستخدم غير معروف',
-          senderAvatar: group?.members.find(m => m.id === msg.sender)?.avatar || null,
+          ...msg,
+          senderName: msg.senderName || 'مستخدم غير معروف',
+          senderAvatar: msg.senderAvatar || '/default-avatar.png',
       })));
       setTimeout(scrollToBottom, 100);
     };
 
     const onReceiveMessage = (message: Message) => {
       setMessages(prev => [...prev, {
-          id: message.id,
-          groupId: message.groupId,
-          sender: message.sender,
-          content: DOMPurify.sanitize(message.content), 
-          timestamp: message.timestamp,
-          senderName: group?.members.find(m => m.id === message.sender)?.name || 'مستخدم غير معروف',
-          senderAvatar: group?.members.find(m => m.id === message.sender)?.avatar || null,
+          ...message,
+          senderName: message.senderName || 'مستخدم غير معروف',
+          senderAvatar: message.senderAvatar || '/default-avatar.png',
       }]);
       setTimeout(scrollToBottom, 100);
     };
@@ -272,12 +271,13 @@ export default function GroupChatPage() {
       setMessages(prev => {
         const filteredMessages = prev.filter(msg => msg.id !== data.messageId);
         return [...filteredMessages, {
-            id: data.systemMessage.id,
-            groupId: data.systemMessage.groupId,
-            sender: data.systemMessage.sender,
-            content: DOMPurify.sanitize(data.systemMessage.content), 
-            timestamp: data.systemMessage.timestamp,
-            isSystemMessage: true, 
+          id: data.systemMessage.id,
+          groupId: data.systemMessage.groupId,
+          sender: data.systemMessage.sender,
+          content: DOMPurify.sanitize(data.systemMessage.content),
+          timestamp: data.systemMessage.timestamp,
+          isSystemMessage: true,
+          type: 'system',
         }];
       });
       setTimeout(scrollToBottom, 100);
@@ -351,6 +351,7 @@ export default function GroupChatPage() {
       groupId: group.id,
       content: sanitizedContent,
       token: token,
+      type: 'text',
     });
     setNewMessage('');
     handleTyping(false); 
@@ -422,6 +423,86 @@ export default function GroupChatPage() {
     }
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/upload-media', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.filepath) {
+      let type: string = 'file';
+      if (file.type.startsWith('image')) type = 'image';
+      else if (file.type.startsWith('video')) type = 'video';
+      socketRef.current?.emit('sendMessage', {
+        groupId: group.id,
+        content: data.filepath,
+        token: localStorage.getItem('token'),
+        type,
+      });
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    setIsDeletingGroup(true);
+    setDeleteGroupError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/groups/${group.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        router.push('/groups');
+      } else {
+        setDeleteGroupError(data.error || 'فشل حذف المجموعة');
+      }
+    } catch (err) {
+      setDeleteGroupError('حدث خطأ أثناء حذف المجموعة');
+    } finally {
+      setIsDeletingGroup(false);
+    }
+  };
+
+  const toggleSelectMember = (memberId: string) => {
+    setSelectedMemberIds(prev => prev.includes(memberId) ? prev.filter(id => id !== memberId) : [...prev, memberId]);
+  };
+
+  const handleBulkDeleteMembers = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsBulkDeleting(true);
+    setBulkDeleteError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/groups/${group.id}/members`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userIds: selectedMemberIds })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSelectedMemberIds([]);
+        fetchGroupDetails();
+      } else {
+        setBulkDeleteError(data.error || 'فشل حذف الأعضاء');
+      }
+    } catch (err) {
+      setBulkDeleteError('حدث خطأ أثناء حذف الأعضاء');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!previewImage) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPreviewImage(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewImage]);
+
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center min-vh-100">
@@ -475,182 +556,259 @@ export default function GroupChatPage() {
     );
   }
 
+  let filteredMessages = messages;
+  if (activeTab === 'images') filteredMessages = messages.filter(
+    m => m.type === 'image' || (typeof m.content === 'string' && /\.(jpg|jpeg|png|gif)$/i.test(m.content))
+  );
+  if (activeTab === 'videos') filteredMessages = messages.filter(m => m.type === 'video');
+
   return (
-    <div className="min-vh-100 bg-white d-flex flex-column">
-      <main className="container-fluid py-3">
-        <div className="row">
-          <div className="col-12 col-lg-9 mb-3">
-            {/* منطقة الدردشة */}
-            <div className="bg-white rounded-3 p-4 h-100 d-flex flex-column">
-              <h1 className="fs-2 fw-bold mb-2">{group.name}</h1>
-              <p className="text-secondary mb-3">{group.memberCount} أعضاء</p>
-              
-              {/* شريط التنقل */}
-              <div className="border-bottom mb-3 d-flex gap-2">
-                <button className="btn btn-link border-0 border-bottom border-2 border-primary text-primary fw-bold rounded-0">الدردشة</button>
-                <button className="btn btn-link border-0 text-secondary">الفيديوهات</button>
-                <button className="btn btn-link border-0 text-secondary">الصور</button>
-                <button className="btn btn-link border-0 text-secondary">PDFs</button>
-                <button className="btn btn-link border-0 text-secondary">تسجيلات صوتية</button>
-                <button className="btn btn-link border-0 text-secondary">روابط</button>
-              </div>
-              
-              {/* منطقة الرسائل */}
-              <div className="flex-grow-1 overflow-auto p-3 mb-3 d-flex flex-column" style={{ minHeight: 300 }}>
-                {messages.length === 0 && !loading ? (
-                  <p className="text-center text-muted">لا توجد رسائل بعد. ابدأ الدردشة!</p>
-                ) : (
-                  messages.map((msg) => {
-                    const senderInfo = group?.members.find(member => member.id === msg.sender);
-                    const displaySenderName = senderInfo?.name || 'مستخدم غير معروف';
-                    const displaySenderAvatar = senderInfo?.avatar || '/default-avatar.png';
-                    const isSystemMessage = msg.isSystemMessage || false;
-                    const isCurrentUser = msg.sender === currentUserId;
-                    
-                    return (
-                      <div key={msg.id} className="mb-3">
-                        {/* اسم المرسل */}
-                        <div className="mb-1">
-                          <span className="text-muted">{displaySenderName}</span>
-                        </div>
-                        
-                        {/* محتوى الرسالة */}
-                        <div className="d-flex">
-                          {/* صورة المستخدم */}
-                          <img
-                            src={displaySenderAvatar}
-                            alt={displaySenderName}
-                            className="rounded-circle me-2"
-                            style={{ width: 40, height: 40, objectFit: 'cover' }}
-                          />
-                          
-                          {/* فقاعة الرسالة */}
-                          <div 
-                            className={`p-3 rounded-3 ${isSystemMessage 
-                              ? 'bg-warning-subtle text-warning-emphasis' 
-                              : isCurrentUser 
-                                ? 'bg-primary-subtle' 
-                                : 'bg-light'}`}
-                            style={{ maxWidth: '80%' }}
-                          >
-                            {isSystemMessage ? (
-                              <div className="fst-italic" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }}></div>
-                            ) : (
-                              <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }}></div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-              
-              {/* مؤشر الكتابة */}
-              {typingUsers.size > 0 && (
-                <div className="text-secondary small mb-2">
-                  {Array.from(typingUsers)
-                    .map(userId => group.members.find(m => m.id === userId)?.name || 'مستخدم غير معروف')
-                    .filter(Boolean)
-                    .join(', ')}{' '}
-                  يكتب...
-                </div>
-              )}
-              
-              {/* مربع إدخال الرسالة */}
-              <div className="d-flex align-items-center bg-light rounded-pill p-2">
-                <input
-                  type="text"
-                  className="form-control border-0 bg-transparent"
-                  placeholder="اكتب رسالة..."
-                  value={newMessage}
-                  onChange={handleMessageChange}
-                  onKeyDown={handleKeyDown}
-                  disabled={!isConnected}
-                />
-                <button
-                  className="btn btn-link text-primary"
-                  onClick={handleSendMessage}
-                  disabled={!isConnected || !newMessage.trim()}
-                >
-                  <i className="bi bi-send-fill"></i>
-                </button>
-                <button className="btn btn-link text-secondary">
-                  <i className="bi bi-emoji-smile"></i>
-                </button>
-                <button className="btn btn-link text-secondary">
-                  <i className="bi bi-paperclip"></i>
-                </button>
-              </div>
-              
-              {/* حالة الاتصال */}
-              {!isConnected && (
-                <p className="text-warning small mt-2 text-center">جاري الاتصال بخادم الدردشة...</p>
-              )}
-            </div>
+    <div className="container-fluid py-4" style={{ background: "#f8f9fb", minHeight: "100vh" }}>
+      <div className="row flex-column-reverse flex-lg-row">
+        {/* الشات والمحتوى */}
+        <div className="col-lg-8 col-md-7 col-12 mb-4 order-2 order-lg-1">
+          <div className="bg-white rounded shadow-sm p-4 mb-3">
+            <h3 className="fw-bold mb-1 d-flex align-items-center gap-2 position-relative">
+              {group.name}
+            </h3>
+            <span className="text-muted small">{group.memberCount} أعضاء</span>
           </div>
-          
-          {/* القائمة الجانبية */}
-          <div className="col-12 col-lg-3">
-            {/* معلومات المجموعة */}
-            <div className="bg-white rounded-3 shadow-sm p-4 mb-3">
-              <h2 className="fs-5 fw-bold mb-3">معلومات المجموعة</h2>
-              <div className="d-flex align-items-center mb-3">
-                <img
-                  src={group.coverImageUrl || '/default-group.png'}
-                  alt={group.name}
-                  className="rounded-circle me-2"
-                  style={{ width: 50, height: 50, objectFit: 'cover' }}
-                />
-                <div>
-                  <h3 className="fs-6 fw-bold mb-0">{group.name}</h3>
-                  <p className="text-muted small mb-0">{group.memberCount} أعضاء</p>
-                </div>
-              </div>
-              <p className="text-dark mb-2">{group.description}</p>
-            </div>
-            
-            {/* قائمة الأعضاء */}
-            <div className="bg-white rounded-3 shadow-sm p-4">
-              <h3 className="fs-5 fw-bold mb-3">الأعضاء ({group.members.length})</h3>
-              <div className="vstack gap-3">
-                {group.members
-                  .sort((a, b) => (a.role === 'admin' ? -1 : 1))
-                  .map((member) => (
-                    <div key={member.id} className="d-flex align-items-center">
-                      <div className="position-relative">
-                        <img
-                          src={member.avatar || '/default-avatar.png'}
-                          alt={member.name}
-                          className="rounded-circle"
-                          style={{ width: 40, height: 40, objectFit: 'cover' }}
-                        />
-                        <span
-                          className="position-absolute bottom-0 end-0 rounded-circle border border-white"
-                          style={{
-                            width: 12,
-                            height: 12,
-                            background: onlineUsers.has(member.id) ? '#28a745' : '#adb5bd'
-                          }}
-                        ></span>
-                      </div>
-                      <div className="ms-2">
-                        <p className="mb-0 fw-medium">{member.name}</p>
-                        <p className="mb-0 small text-muted">
-                          {member.role === 'admin' ? 'مسؤول' : 'عضو'}
-                        </p>
-                      </div>
-                    </div>
+          {/* شريط التبويبات */}
+          <ul className="nav nav-tabs mb-3">
+            <li className="nav-item">
+              <button className={`nav-link ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>الدردشة</button>
+            </li>
+            <li className="nav-item">
+              <button className={`nav-link ${activeTab === 'images' ? 'active' : ''}`} onClick={() => setActiveTab('images')}>الصور</button>
+            </li>
+            <li className="nav-item">
+              <button className={`nav-link ${activeTab === 'videos' ? 'active' : ''}`} onClick={() => setActiveTab('videos')}>الفيديوهات</button>
+            </li>
+            <li className="nav-item"><a className="nav-link" href="#">PDFs</a></li>
+            <li className="nav-item"><a className="nav-link" href="#">تسجيلات صوتية</a></li>
+            <li className="nav-item"><a className="nav-link" href="#">روابط</a></li>
+          </ul>
+          {/* رسائل الدردشة */}
+          <div className="chat-messages" style={{ height: 400, overflowY: "auto", background: "#f8f9fa", borderRadius: 8, padding: 16 }}>
+            {filteredMessages.length === 0 ? (
+              <p className="text-center text-muted">لا توجد رسائل بعد. ابدأ الدردشة!</p>
+            ) : (
+              activeTab === 'images' ? (
+                <div className="d-flex flex-wrap gap-3">
+                  {filteredMessages.map((msg, idx) => (
+                    <img
+                      key={idx}
+                      src={msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content}
+                      alt="صورة"
+                      style={{ maxWidth: 180, maxHeight: 180, borderRadius: 8, objectFit: 'cover', cursor: 'pointer', transition: 'box-shadow 0.2s' }}
+                      onClick={() => setPreviewImage(msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content)}
+                    />
                   ))}
+                </div>
+              ) : (
+                filteredMessages.map((msg, idx) => (
+                  <div key={idx} className={`d-flex mb-3 ${msg.sender === group.adminId ? 'justify-content-end' : ''}`} style={{ alignItems: 'flex-end' }}>
+                    <img src={msg.senderAvatar || '/default-avatar.png'} className="rounded-circle me-2" width={40} height={40} alt="avatar" />
+                    <div>
+                      <div className="fw-bold small d-flex align-items-center gap-2">
+                        {msg.type === 'image' && <FaImage className="text-info" />}
+                        {msg.type === 'video' && <FaVideo className="text-danger" />}
+                        {msg.type === 'file' && <FaFileAlt className="text-secondary" />}
+                        {msg.senderName || 'مستخدم غير معروف'}
+                      </div>
+                      <div className={`p-2 rounded-3 mt-1 ${msg.sender === group.adminId ? 'bg-info text-white' : 'bg-light'}`} style={{ minWidth: 120, maxWidth: 350 }}>
+                        {(() => {
+                          const isImage = msg.type === 'image' || (typeof msg.content === 'string' && /\.(jpg|jpeg|png|gif)$/i.test(msg.content));
+                          const isVideo = msg.type === 'video' || (typeof msg.content === 'string' && /\.(mp4|webm|mov)$/i.test(msg.content));
+                          if (isImage) {
+                            return (
+                              <img
+                                src={msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content}
+                                alt="صورة"
+                                style={{ maxWidth: 200, borderRadius: 8, cursor: 'pointer' }}
+                                onClick={() => setPreviewImage(msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content)}
+                              />
+                            );
+                          } else if (isVideo) {
+                            return <video src={msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content} controls style={{ maxWidth: 250, borderRadius: 8 }} />;
+                          } else if (msg.type === 'file') {
+                            return <a href={msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content} target="_blank" rel="noopener noreferrer">ملف مرفق</a>;
+                          } else {
+                            return <span>{msg.content}</span>;
+                          }
+                        })()}
+                      </div>
+                      <div className="text-muted small text-end mt-1">{new Date(msg.timestamp).toLocaleTimeString()}</div>
+                    </div>
+                  </div>
+                ))
+              )
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          {/* مربع كتابة الرسالة */}
+          <div className="input-group mt-3 align-items-center">
+            <input
+              type="text"
+              className="form-control"
+              placeholder="اكتب رسالة..."
+              value={newMessage}
+              onChange={handleMessageChange}
+              onKeyDown={handleKeyDown}
+              disabled={!isConnected}
+              style={{ borderRadius: '20px' }}
+            />
+            <label className="btn btn-light mb-0 ms-2" title="إرفاق صورة/فيديو" style={{ borderRadius: '50%' }}>
+              <FaPaperclip size={20} />
+              <input type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={handleFileChange} />
+            </label>
+            <button className="btn btn-primary ms-2" onClick={handleSendMessage} disabled={!isConnected || !newMessage.trim()} style={{ borderRadius: '50%' }}>
+              <FaRegSmile size={20} />
+            </button>
+          </div>
+        </div>
+        {/* الشريط الجانبي */}
+        <div className="col-lg-4 col-md-5 col-12 order-1 order-lg-2">
+          <div className="bg-white rounded shadow-sm p-4 mb-3">
+            <div className="d-flex align-items-center mb-3 position-relative">
+              <img src={group.coverImageUrl || '/default-group.png'} className="rounded-circle me-3" width={56} height={56} alt="group" />
+              <div>
+                <div className="fw-bold d-flex align-items-center gap-2">
+                  {group.name}
+                  {isCurrentUserAdmin && (
+                    <div className="dropdown" style={{ direction: 'rtl' }}>
+                      <button
+                        className="btn btn-sm btn-light border-0 admin-dropdown-toggle"
+                        type="button"
+                        id="adminActionsDropdown"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.07)', transition: 'background 0.2s', color: '#3b3b98' }}
+                      >
+                        <i className="bi bi-three-dots-vertical fs-4"></i>
+                      </button>
+                      <ul
+                        className="dropdown-menu dropdown-menu-end shadow"
+                        aria-labelledby="adminActionsDropdown"
+                        style={{ minWidth: 180, textAlign: 'right', borderRadius: 12 }}
+                      >
+                        <li>
+                          <a className="dropdown-item d-flex align-items-center gap-2" href={`/group/${group.id}/edit`}>
+                            <i className="bi bi-pencil text-primary"></i>
+                            <span>تعديل المجموعة</span>
+                          </a>
+                        </li>
+                        <li><hr className="dropdown-divider" /></li>
+                        <li>
+                          <button
+                            className="dropdown-item d-flex align-items-center gap-2 text-danger"
+                            onClick={() => setShowDeleteGroupModal(true)}
+                            style={{ fontWeight: 500 }}
+                          >
+                            <i className="bi bi-trash-fill"></i>
+                            <span>حذف المجموعة</span>
+                          </button>
+                          <div className="small text-danger ps-3 pe-3 pb-1">تحذير: لا يمكن التراجع بعد الحذف!</div>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="text-muted small">{group.memberCount} أعضاء</div>
+              </div>
+            </div>
+            <h6 className="fw-bold mt-4 mb-2">الأعضاء</h6>
+            <ul className="list-unstyled">
+              {group.members && group.members.length > 0 ? group.members.map((member: any, idx: number) => (
+                <li key={idx} className="d-flex align-items-center mb-2 position-relative">
+                  <img src={member.avatar || '/default-avatar.png'} className="rounded-circle me-2" width={32} height={32} alt={member.name} />
+                  <span
+                    className={onlineUsers.has(member.id) ? 'online-indicator' : 'offline-indicator'}
+                    style={{
+                      position: 'absolute',
+                      right: 30,
+                      bottom: 2,
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      background: onlineUsers.has(member.id) ? '#28c76f' : '#adb5bd',
+                      border: '2px solid #fff',
+                      boxShadow: '0 0 4px rgba(0,0,0,0.1)'
+                    }}
+                  ></span>
+                  <span>{member.name}</span>
+                </li>
+              )) : <li className="text-muted">لا يوجد أعضاء</li>}
+            </ul>
+          </div>
+        </div>
+      </div>
+      {/* Modal تأكيد حذف المجموعة */}
+      {showDeleteGroupModal && (
+        <div className="modal fade show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,0.3)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title text-danger">تأكيد حذف المجموعة</h5>
+                <button type="button" className="btn-close" onClick={() => setShowDeleteGroupModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                {group.memberCount > 1 ? (
+                  <div className="alert alert-warning">
+                    لا يمكنك حذف المجموعة إلا إذا كنت العضو الوحيد فيها. يرجى حذف جميع الأعضاء أولاً.
+                  </div>
+                ) : (
+                  <>
+                    <p>هل أنت متأكد أنك تريد حذف المجموعة؟ لا يمكن التراجع عن هذا الإجراء.</p>
+                    {deleteGroupError && <div className="alert alert-danger">{deleteGroupError}</div>}
+                  </>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowDeleteGroupModal(false)}>إلغاء</button>
+                <button className="btn btn-danger" disabled={group.memberCount > 1 || isDeletingGroup} onClick={handleDeleteGroup}>
+                  {isDeletingGroup ? 'جاري الحذف...' : 'تأكيد الحذف'}
+                </button>
               </div>
             </div>
           </div>
         </div>
-      </main>
+      )}
+      {previewImage && (
+        <div
+          className="modal fade show d-block"
+          tabIndex="-1"
+          style={{ background: 'rgba(0,0,0,0.7)', zIndex: 2000 }}
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-content bg-transparent border-0 shadow-none">
+              <img
+                src={previewImage}
+                alt="صورة مكبرة"
+                style={{ maxWidth: '80vw', maxHeight: '80vh', borderRadius: 16, boxShadow: '0 4px 32px rgba(0,0,0,0.3)' }}
+              />
+              <button
+                className="btn btn-light position-absolute top-0 end-0 m-3 fs-3"
+                style={{ borderRadius: '50%', zIndex: 10 }}
+                onClick={() => setPreviewImage(null)}
+              >
+                &times;
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+/*
+.admin-dropdown-toggle:hover, .admin-dropdown-toggle:focus {
+  background: #e0e7ff !important;
+  color: #222 !important;
+}
+*/
 
 
 
