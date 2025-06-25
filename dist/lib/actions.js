@@ -5,18 +5,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getGroups = getGroups;
 exports.getGroupMessages = getGroupMessages;
-// lib/actions.ts
-const Group_1 = __importDefault(require("@/models/Group"));
 const Message_1 = __importDefault(require("@/models/Message"));
 const db_1 = __importDefault(require("./db"));
+const mongoose_1 = __importDefault(require("mongoose"));
 async function getGroups() {
     try {
-        const connection = await (0, db_1.default)(); // استدعاء معدل
-        // تعديل استدعاء populate لتجنب StrictPopulateError
-        const groups = await Group_1.default.find({}).lean();
-        
-        // إذا كنت بحاجة إلى معلومات الأعضاء، استخدم نهجًا آخر
-        
+        await (0, db_1.default)();
+        // استخدام الاستعلام بطريقة أخرى
+        const groups = await mongoose_1.default.model('Group').find();
         return JSON.parse(JSON.stringify(groups));
     }
     catch (error) {

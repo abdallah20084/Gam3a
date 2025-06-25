@@ -83,14 +83,16 @@ app.prepare().then(() => {
         pingTimeout: 60000,
         pingInterval: 25000,
         cors: {
-            origin: [
-                "http://localhost:3000",
-                "http://30.30.30.20:3000",
-                "http://gam3a5g.com:3000",
-            ],
+            origin: process.env.NODE_ENV === 'production'
+                ? ["https://yourdomain.com"]
+                : ["http://localhost:3000", "http://127.0.0.1:3000"],
             methods: ["GET", "POST"],
             credentials: true,
+            allowedHeaders: ["authorization", "content-type"]
         },
+        transports: ['polling', 'websocket'], // البدء بـ polling ثم الترقية إلى websocket
+        allowEIO3: true,
+        connectTimeout: 45000, // زيادة مهلة الاتصال
     });
     console.log('Socket.IO: Server initialized successfully via custom server.');
     console.log(`Server using JWT_SECRET for verification (first 10 chars): ${JWT_SECRET.substring(0, 10)}...`);
@@ -98,9 +100,10 @@ app.prepare().then(() => {
         setInterval(() => {
             const now = new Date();
             connectedUsers.forEach((user, socketId) => {
+                var _a;
                 if (now.getTime() - user.lastActivity.getTime() > 120000) {
                     console.log(`Socket.IO: Disconnecting inactive socket ${socketId} (User: ${user.userId})`);
-                    io.sockets.sockets.get(socketId)?.disconnect();
+                    (_a = io.sockets.sockets.get(socketId)) === null || _a === void 0 ? void 0 : _a.disconnect();
                 }
             });
         }, 60000);
@@ -138,7 +141,7 @@ app.prepare().then(() => {
                         return;
                     }
                     const userDoc = await User_1.default.findById(userId, { name: 1 }).lean();
-                    currentUserName = userDoc?.name || 'مستخدم';
+                    currentUserName = (userDoc === null || userDoc === void 0 ? void 0 : userDoc.name) || 'مستخدم';
                     if (!userDoc) {
                         socket.emit('errorJoiningGroup', 'المستخدم غير موجود.');
                         socket.disconnect();
@@ -316,8 +319,10 @@ app.prepare().then(() => {
                         socket.emit('messageError', 'الرسالة غير موجودة أو لا تنتمي لهذه المجموعة.');
                         return;
                     }
-                    const groupDoc = await Group_1.default.findById(groupId).lean();
-                    const isGroupAdmin = groupDoc?.admin && groupDoc.admin.equals(userId);
+                    // حل مؤقت باستخدام any
+                    // @ts-ignore
+                    const groupDoc = await Group_1.default.findOne({ _id: groupId });
+                    const isGroupAdmin = (groupDoc === null || groupDoc === void 0 ? void 0 : groupDoc.admin) && groupDoc.admin.equals(userId);
                     if (!isGroupAdmin && !isSuperAdmin) {
                         socket.emit('messageError', 'غير مصرح لك بحذف هذه الرسالة. فقط المدير أو السوبر أدمن يمكنه الحذف.');
                         return;
@@ -325,7 +330,7 @@ app.prepare().then(() => {
                     await Message_1.default.deleteOne({ _id: messageId });
                     console.log(`Socket ${socket.id}: Message ${messageId} deleted by user ${userId} in group ${groupId}.`);
                     const deleterUser = await User_1.default.findById(userId, { name: 1 }).lean();
-                    const deleterName = deleterUser?.name || 'مستخدم غير معروف';
+                    const deleterName = (deleterUser === null || deleterUser === void 0 ? void 0 : deleterUser.name) || 'مستخدم غير معروف';
                     const systemMessage = {
                         id: new mongoose_1.default.Types.ObjectId().toString(),
                         groupId: groupId,
@@ -417,7 +422,27 @@ app.prepare().then(() => {
             });
         });
     }
-    httpServer.listen(port, hostname, () => {
-        console.log(`Server listening on http://${hostname}:${port}`);
+    // إضافة معالجة الأخطاء غير المتوقعة
+    process.on('uncaughtException', (error) => {
+        console.error('Uncaught Exception:', error);
+        // لا تنهي العملية هنا، فقط سجل الخطأ
+    });
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+        // لا تنهي العملية هنا، فقط سجل الخطأ
+    });
+    // تعديل إعدادات الخادم
+    const PORT = process.env.PORT || 3000;
+    httpServer.listen(PORT, () => {
+        console.log(`Server listening on port ${PORT}`);
+        console.log(`Socket.IO server is running at http://localhost:${PORT}/api/socket`);
+    });
+    // إضافة معالجة إغلاق الخادم بشكل آمن
+    process.on('SIGTERM', () => {
+        console.log('SIGTERM signal received: closing HTTP server');
+        httpServer.close(() => {
+            console.log('HTTP server closed');
+            process.exit(0);
+        });
     });
 });

@@ -1,14 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false, // تعطيل الوضع الصارم لتجنب التهيئة المزدوجة
+  reactStrictMode: true,
+  // تعطيل العمال تمامًا
+  experimental: {
+    workerThreads: false,
+    cpus: 1
+  },
+  // تكوين webpack بدون عمال
   webpack: (config, { isServer }) => {
-    // تكوين webpack لدعم Socket.IO
+    // تكوين لـ Socket.IO
     if (!isServer) {
       config.externals = [...(config.externals || []), { bufferutil: 'bufferutil', 'utf-8-validate': 'utf-8-validate' }];
     }
+    
+    // تعطيل ذاكرة التخزين المؤقت لـ webpack
+
+    
     return config;
   },
-  // إضافة تكوين لمعالجة طلبات Socket.IO
+  // تكوين لـ Socket.IO
   async rewrites() {
     return [
       {
@@ -17,13 +27,14 @@ const nextConfig = {
       },
     ];
   },
-  // تعطيل العمال المتعددة في وضع التطوير
-  experimental: {
-    workerThreads: false,
-    cpus: 1
+  // تأكد من أن الملفات الثابتة يمكن الوصول إليها
+  images: {
+    domains: ['localhost'],
   },
-  // تعيين وقت انتظار أطول للعمال
-  staticPageGenerationTimeout: 120,
 };
 
 module.exports = nextConfig;
+
+
+
+

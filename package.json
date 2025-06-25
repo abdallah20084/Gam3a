@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "build-server": "tsc -p tsconfig.server.json",
-    "dev": "cross-env NODE_ENV=development ts-node-dev --project tsconfig.server.json --transpile-only --ignore-watch \".next\" --ignore-watch \"node_modules\" server.ts",
-    "build": "npm run build-server && next build",
+    "dev": "npm run build-server && cross-env NODE_ENV=development NODE_OPTIONS=\"--max-old-space-size=4096\" node dist/server.js",
     "start": "node dist/server.js",
     "lint": "next lint"
   },
@@ -26,6 +25,7 @@
     "cross-env": "^7.0.3",
     "dompurify": "^3.2.6",
     "dotenv": "^16.5.0",
+    "isomorphic-dompurify": "^2.25.0",
     "jsdom": "^26.1.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.517.0",

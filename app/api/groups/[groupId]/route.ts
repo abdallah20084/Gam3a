@@ -23,11 +23,11 @@ const getAuthDetailsFromToken = (token: string) => {
 };
 
 // GET method to fetch single group details
-export async function GET(request: NextRequest, { params }: { params: { groupId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ groupId: string }> }) {
   await connectDB();
 
   try {
-    const { groupId } = params;
+    const { groupId } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
       return NextResponse.json({ success: false, error: 'معرف مجموعة غير صالح.' }, { status: 400 });
@@ -123,11 +123,11 @@ export async function GET(request: NextRequest, { params }: { params: { groupId:
 }
 
 // PUT method to update group details
-export async function PUT(request: NextRequest, { params }: { params: { groupId: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ groupId: string }> }) {
   await connectDB();
 
   try {
-    const { groupId } = params;
+    const { groupId } = await params;
     const { name, description, coverImageUrl } = await request.json(); 
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
@@ -174,11 +174,11 @@ export async function PUT(request: NextRequest, { params }: { params: { groupId:
 }
 
 // DELETE method to delete a group
-export async function DELETE(request: NextRequest, { params }: { params: { groupId: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ groupId: string }> }) {
   await connectDB();
 
   try {
-    const { groupId } = params;
+    const { groupId } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(groupId)) {
       return NextResponse.json({ success: false, error: 'معرف مجموعة غير صالح.' }, { status: 400 });
@@ -229,4 +229,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { group
     return NextResponse.json({ success: false, error: error.message || 'خطأ داخلي في الخادم.' }, { status: 500 });
   }
 }
+
+
+
 

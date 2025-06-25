@@ -8,7 +8,7 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
+// import Navbar from '@/components/Navbar';
 
 const formSchema = z.object({
   name: z.string().min(3, 'الاسم يجب أن يتكون من 3 أحرف على الأقل.'),
@@ -105,8 +105,6 @@ export default function RegisterPage() {
 
   return (
     <div className="min-vh-100 d-flex flex-column bg-light">
-      <Navbar />
-
       <main className="flex-grow-1 d-flex justify-content-center align-items-center w-100 p-4">
         <div className="bg-white p-4 p-md-5 rounded-3 shadow w-100" style={{ maxWidth: 400 }}>
           <h1 className="h4 fw-bold text-center mb-4">إنشاء حساب جديد</h1>
@@ -197,3 +195,4 @@ export default function RegisterPage() {
     </div>
   );
 }
+

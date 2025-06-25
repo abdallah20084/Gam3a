@@ -77,9 +77,7 @@ export default function Navbar() {
   const BootstrapScript = () => {
     return (
       <Script
-        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-        crossOrigin="anonymous"
+        src="/bootstrap/dist/js/bootstrap.bundle.min.js"
         strategy="afterInteractive"
       />
     );

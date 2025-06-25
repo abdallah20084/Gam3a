@@ -3,11 +3,10 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import ErrorMessage from '@/components/ErrorMessage';
 import { io, Socket } from 'socket.io-client';
-import DOMPurify from 'dompurify';
+import DOMPurify from 'isomorphic-dompurify';
 
 const SOCKET_SERVER_URL = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:3000';
 
@@ -178,29 +177,35 @@ export default function GroupChatPage() {
     const socket: AppSocket = io(SOCKET_SERVER_URL, {
       path: '/api/socket',
       auth: { token },
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      transports: ['websocket', 'polling'], // السماح بالتبديل بين websocket و polling
-      timeout: 10000, // زيادة مهلة الاتصال
-      forceNew: true, // إنشاء اتصال جديد في كل مرة
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+      timeout: 20000, // زيادة مهلة الاتصال
+      transports: ['polling', 'websocket'], // البدء بـ polling ثم الترقية إلى websocket
+      upgrade: true,
+      rememberUpgrade: true,
+      forceNew: true,
     });
-
-    socketRef.current = socket;
 
     // إضافة معالج للأخطاء
     socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
+      console.error('Socket connection error details:', error.message);
       setError(`فشل الاتصال بخادم الدردشة: ${error.message}`);
       setIsConnected(false);
     });
 
+    socketRef.current = socket;
+
+    console.log('Attempting to connect to socket server:', SOCKET_SERVER_URL);
+
     const onConnect = () => {
+      console.log('Socket connected successfully with ID:', socket.id);
       setIsConnected(true);
       socket.emit('joinGroup', groupId, token);
     };
 
     const onConnectError = (error: any) => {
-      setError('فشل الاتصال بخادم الدردشة. الرجاء التأكد من تشغيل الخادم بشكل صحيح.');
+      console.error('Socket connection error:', error);
+      setError(`فشل الاتصال بخادم الدردشة: ${error.message}`);
       setIsConnected(false);
     };
 
@@ -399,6 +404,24 @@ export default function GroupChatPage() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    
+    // إرسال حالة الكتابة إذا كان المستخدم يكتب
+    if (e.target.value.trim() !== '') {
+      handleTyping(true);
+    } else {
+      handleTyping(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e as unknown as React.FormEvent);
+    }
+  };
+
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center min-vh-100">
@@ -410,7 +433,6 @@ export default function GroupChatPage() {
   if (error) {
     return (
       <div className="min-vh-100 d-flex flex-column">
-        <Navbar />
         <main className="flex-grow-1 py-5 container">
           <ErrorMessage message={error} />
           {error.includes('الرجاء تسجيل الدخول') && (
@@ -446,7 +468,6 @@ export default function GroupChatPage() {
   if (!group) {
     return (
       <div className="min-vh-100 d-flex flex-column">
-        <Navbar />
         <main className="flex-grow-1 py-5 container">
           <p className="text-center text-danger fs-5">المجموعة غير متوفرة أو حدث خطأ أثناء تحميلها.</p>
         </main>
@@ -543,7 +564,7 @@ export default function GroupChatPage() {
                   type="text"
                   className="form-control border-0 bg-transparent"
                   placeholder="اكتب رسالة..."
-                  value={messageText}
+                  value={newMessage}
                   onChange={handleMessageChange}
                   onKeyDown={handleKeyDown}
                   disabled={!isConnected}
@@ -551,7 +572,7 @@ export default function GroupChatPage() {
                 <button
                   className="btn btn-link text-primary"
                   onClick={handleSendMessage}
-                  disabled={!isConnected || !messageText.trim()}
+                  disabled={!isConnected || !newMessage.trim()}
                 >
                   <i className="bi bi-send-fill"></i>
                 </button>
@@ -630,6 +651,13 @@ export default function GroupChatPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
 
 
 

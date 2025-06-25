@@ -1,35 +1,14 @@
 {
+  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "target": "es2020",
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": false,
-    "skipLibCheck": true,
-    "outDir": "./dist",
-    "rootDir": "./",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"]
-    },
-    "lib": ["esnext"],
-    "types": ["node"]
+    "module": "commonjs",
+    "outDir": "dist",
+    "target": "es2017",
+    "isolatedModules": false,
+    "noEmit": false
   },
-  "include": [
-    "server.ts",
-    "lib/**/*.ts",
-    "models/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    ".next",
-    "app",
-    "pages",
-    "public",
-    "config"
-  ]
+  "include": ["server.ts", "lib/**/*.ts", "models/**/*.ts"]
 }
+
 
 

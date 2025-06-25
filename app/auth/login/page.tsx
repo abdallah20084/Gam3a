@@ -1,10 +1,9 @@
 // app/auth/login/page.tsx
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import Navbar from '@/components/Navbar';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -68,7 +67,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-vh-100 d-flex flex-column bg-light">
-      <Navbar />
       <main className="flex-grow-1 d-flex justify-content-center align-items-center w-100 p-4">
         <div className="bg-white p-4 p-md-5 rounded-3 shadow w-100" style={{ maxWidth: 400 }}>
           <h1 className="h4 fw-bold text-center mb-4">تسجيل الدخول</h1>
@@ -128,3 +126,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

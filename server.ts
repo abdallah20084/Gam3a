@@ -64,8 +64,12 @@ type MessageLeanType = Pick<IMessage, '_id' | 'group'> & {
   group: mongoose.Types.ObjectId;
 };
 
-type GroupLeanType = Pick<IGroup, '_id' | 'admin'> & {
+type GroupLeanType = {
+  _id: mongoose.Types.ObjectId;
   admin: mongoose.Types.ObjectId;
+  name?: string;
+  description?: string;
+  coverImageUrl?: string;
 };
 
 type UserLeanNameType = Pick<IUser, '_id' | 'name'> & {
@@ -86,19 +90,15 @@ app.prepare().then(() => {
     pingTimeout: 60000,
     pingInterval: 25000,
     cors: {
-      origin: [
-        "http://localhost:3000",
-        "http://30.30.30.20:3000",
-        "http://gam3a5g.com:3000",
-        // أضف المزيد من الأصول المسموح بها إذا لزم الأمر
-        "*" // يسمح بجميع الأصول (استخدم هذا للاختبار فقط)
-      ],
+      origin: process.env.NODE_ENV === 'production'
+        ? ["https://yourdomain.com"]
+        : ["http://localhost:3000", "http://127.0.0.1:3000"],
       methods: ["GET", "POST"],
       credentials: true,
-    },
-    // إضافة خيارات جديدة لتحسين الاتصال
-    transports: ['websocket', 'polling'],
+      allowedHeaders: ["authorization", "content-type"]    },
+    transports: ['polling', 'websocket'], // البدء بـ polling ثم الترقية إلى websocket
     allowEIO3: true,
+    connectTimeout: 45000, // زيادة مهلة الاتصال
   });
 
   console.log('Socket.IO: Server initialized successfully via custom server.');
@@ -357,7 +357,9 @@ app.prepare().then(() => {
             return;
           }
 
-          const groupDoc = await Group.findOne({ _id: groupId }).lean() as unknown as (GroupLeanType | null);
+          // حل مؤقت باستخدام any
+          // @ts-ignore
+          const groupDoc = await Group.findOne({ _id: groupId });
           const isGroupAdmin = groupDoc?.admin && groupDoc.admin.equals(userId);
 
           if (!isGroupAdmin && !isSuperAdmin) {
@@ -486,9 +488,10 @@ app.prepare().then(() => {
   });
 
   // تعديل إعدادات الخادم
-  httpServer.listen(port, hostname, () => {
-    console.log(`Server listening on http://${hostname}:${port}`);
-    console.log(`Socket.IO server available at http://${hostname}:${port}/api/socket`);
+  const PORT = process.env.PORT || 3000;
+  httpServer.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    console.log(`Socket.IO server is running at http://localhost:${PORT}/api/socket`);
   });
 
   // إضافة معالجة إغلاق الخادم بشكل آمن
