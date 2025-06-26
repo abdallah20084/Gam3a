@@ -1,4 +1,4 @@
-// server.ts
+// Agregar definiciones de variables globales al principio del archivo
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -11,37 +11,35 @@ import * as jwt from 'jsonwebtoken';
 import DOMPurify from 'dompurify';
 import { JSDOM } from 'jsdom';
 
+// Definir variables globales
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is not set.');
+}
+
+// Variables para Socket.IO
+let io: SocketIOServer | null = null;
+
+// Variables para el servidor Next.js
+const dev = process.env.NODE_ENV !== 'production';
+const app = next({ dev });
+const handle = app.getRequestHandler();
+
+// Estructuras de datos para seguimiento de usuarios
+const connectedUsers = new Map<string, {
+  userId: string;
+  socketId: string;
+  groups: Set<string>;
+  lastActivity: Date;
+}>();
+
+const userConnectionCount = new Map<string, number>();
+
 // Setup DOMPurify for server-side sanitization
 const window = new JSDOM('').window as unknown as Window;
 const domPurify = DOMPurify(window as any);
 
-// Import your Mongoose models and db connection
-import connectDB from './lib/db';
-import Message, { IMessage } from './models/Message';
-import GroupMember from './models/GroupMember';
-import User, { IUser } from './models/User';
-import Group, { IGroup } from './models/Group';
-
-// استخدام process.env.NODE_ENV إذا كان موجودًا، وإلا استخدام 'development'
-const isDev = process.env.NODE_ENV !== 'production';
-const hostname = '0.0.0.0';
-const port = parseInt(process.env.PORT || '3000', 10);
-
-const app = next({ dev: isDev, hostname, port });
-const handle = app.getRequestHandler();
-
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  console.error('SERVER STARTUP ERROR: JWT_SECRET environment variable is NOT SET after dotenv.config(). Please check your .env file location and content.');
-  process.exit(1);
-}
-
-let io: SocketIOServer | undefined;
-
-const connectedUsers = new Map<string, { userId: string; groups: Set<string>; lastActivity: Date; socketId: string }>();
-const userConnectionCount = new Map<string, number>();
-
+// Definir tipo para mensajes formateados
 interface FormattedMessage {
   id: string;
   groupId: string;
@@ -50,20 +48,32 @@ interface FormattedMessage {
   senderAvatar: string | null;
   content: string;
   timestamp: string;
-  isSystemMessage?: boolean;
   isEdited?: boolean;
+  isSystemMessage?: boolean;
   type: string;
   replyTo?: string;
 }
 
-type PopulatedMessageLean = Omit<IMessage, 'sender'> & {
-  _id: mongoose.Types.ObjectId;
-  sender: Pick<IUser, 'name' | 'avatar'> & { _id: any };
-  __v?: number;
-};
+// Import your Mongoose models and db connection
+import connectDB from './lib/db';
+import Message, { IMessage } from './models/Message';
+import GroupMember from './models/GroupMember';
+import User, { IUser } from './models/User';
+import Group, { IGroup } from './models/Group';
 
-type MessageLeanType = Pick<IMessage, '_id' | 'group'> & {
-  group: mongoose.Types.ObjectId;
+// تعريف أنواع مخصصة لتجنب أخطاء TypeScript مع Mongoose 7
+type MessageDocument = mongoose.Document & IMessage;
+type GroupDocument = mongoose.Document & IGroup;
+type UserDocument = mongoose.Document & IUser;
+
+// تعديل تعريف MessageLeanType
+type MessageLeanType = {
+  _id: mongoose.Types.ObjectId;
+  group: mongoose.Types.ObjectId | string;
+  sender: mongoose.Types.ObjectId | string;
+  content: string;
+  type: string;
+  timestamp: Date;
 };
 
 type GroupLeanType = {
@@ -144,7 +154,7 @@ app.prepare().then(() => {
 
           let userId: mongoose.Types.ObjectId;
           try {
-            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
+            const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
             currentUserId = userId.toString();
           } catch (jwtError: any) {
@@ -182,21 +192,23 @@ app.prepare().then(() => {
           userData.groups.add(groupId);
 
           userConnectionCount.set(userId.toString(), (userConnectionCount.get(userId.toString()) || 0) + 1);
-          if (userConnectionCount.get(userId.toString()) === 1) {
-            io!.emit('userStatusUpdate', { userId: userId.toString(), isOnline: true });
+          if (userConnectionCount.get(userId.toString()) === 1 && io) {
+            io.emit('userStatusUpdate', { userId: userId.toString(), isOnline: true });
           }
 
           // بث رسالة انضمام عضو جديد
-          io!.to(groupId).emit('receiveMessage', {
-            id: new mongoose.Types.ObjectId().toString(),
-            groupId,
-            senderId: userId.toString(),
-            senderName: currentUserName,
-            senderAvatar: null,
-            content: `🟢 ${currentUserName} انضم إلى المجموعة.`,
-            timestamp: new Date().toISOString(),
-            isSystemMessage: true,
-          });
+          if (io) {
+            io.to(groupId).emit('receiveMessage', {
+              id: new mongoose.Types.ObjectId().toString(),
+              groupId,
+              senderId: userId.toString(),
+              senderName: currentUserName,
+              senderAvatar: null,
+              content: `🟢 ${currentUserName} انضم إلى المجموعة.`,
+              timestamp: new Date().toISOString(),
+              isSystemMessage: true,
+            });
+          }
 
           // جلب الرسائل القديمة
           const oldMessages = await Message.find({ group: groupId })
@@ -277,7 +289,7 @@ app.prepare().then(() => {
 
           let userId: mongoose.Types.ObjectId;
           try {
-            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
+            const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
             currentUserId = userId.toString();
           } catch (jwtError: any) {
@@ -323,7 +335,9 @@ app.prepare().then(() => {
             replyTo: newMessage.replyTo ? newMessage.replyTo.toString() : undefined,
           };
 
-          io!.to(groupId).emit('receiveMessage', messageToSend);
+          if (io) {
+            io.to(groupId).emit('receiveMessage', messageToSend);
+          }
           console.log(`Socket ${socket.id}: Message sent to group ${groupId} by user ${userId}`);
 
         } catch (error: any) {
@@ -345,7 +359,7 @@ app.prepare().then(() => {
 
           let userId: mongoose.Types.ObjectId;
           try {
-            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
+            const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
             currentUserId = userId.toString();
           } catch (jwtError: any) {
@@ -354,41 +368,54 @@ app.prepare().then(() => {
             return;
           }
 
-          const messageToDelete = await Message.findById(messageId).lean() as unknown as (MessageLeanType | null);
-          if (!messageToDelete || messageToDelete.group.toString() !== groupId) {
-            socket.emit('messageError', 'الرسالة غير موجودة أو لا تنتمي لهذه المجموعة.');
+          // استخدام findOne بدلاً من findById().lean()
+          const messageToDelete = await Message.findOne({ _id: new mongoose.Types.ObjectId(messageId) }).lean();
+
+          if (!messageToDelete) {
+            // إذا كانت الرسالة غير موجودة، أرسل حدث الحذف للعميل لإزالتها من الواجهة
+            const deleterUser = await User.findById(userId, { name: 1 }).lean();
+            const deleterName = deleterUser?.name || 'مستخدم غير معروف';
+
+            if (io) {
+              io.to(groupId).emit('messageDeleted', {
+                messageId,
+                deletedBy: deleterName,
+                isAdmin: false
+              });
+            }
             return;
           }
 
-          // حل مؤقت باستخدام any
-          // @ts-ignore
-          const groupDoc = await Group.findOne({ _id: groupId });
+          if (messageToDelete.group.toString() !== groupId) {
+            socket.emit('messageError', 'الرسالة لا تنتمي لهذه المجموعة.');
+            return;
+          }
+
+          // التحقق من صلاحية الحذف - صاحب الرسالة أو المدير
+          const groupDoc = await (Group as any).findOne({ _id: new mongoose.Types.ObjectId(groupId) });
           const isGroupAdmin = groupDoc?.admin && groupDoc.admin.equals(userId);
+          const isMessageOwner = messageToDelete.sender.toString() === userId.toString();
 
-          if (!isGroupAdmin) {
-            socket.emit('messageError', 'غير مصرح لك بحذف هذه الرسالة. فقط المدير يمكنه الحذف.');
+          if (!isGroupAdmin && !isMessageOwner) {
+            socket.emit('messageError', 'غير مصرح لك بحذف هذه الرسالة. فقط صاحب الرسالة أو المدير يمكنه الحذف.');
             return;
           }
 
-          await Message.deleteOne({ _id: messageId });
+          // استخدام Model.deleteOne مع تحديد النوع
+          await Message.deleteOne({ _id: new mongoose.Types.ObjectId(messageId) });
+          
           console.log(`Socket ${socket.id}: Message ${messageId} deleted by user ${userId} in group ${groupId}.`);
 
           const deleterUser = await User.findById(userId, { name: 1 }).lean();
           const deleterName = deleterUser?.name || 'مستخدم غير معروف';
 
-          const systemMessage: FormattedMessage = {
-            id: new mongoose.Types.ObjectId().toString(),
-            groupId: groupId,
-            senderId: userId.toString(),
-            senderName: deleterName,
-            senderAvatar: null,
-            content: `قام ${deleterName} بحذف رسالة.`,
-            timestamp: new Date().toISOString(),
-            isSystemMessage: true,
-            type: 'system',
-          };
-
-          io!.to(groupId).emit('messageDeleted', { messageId, systemMessage });
+          if (io) {
+            io.to(groupId).emit('messageDeleted', {
+              messageId,
+              deletedBy: deleterName,
+              isAdmin: isGroupAdmin
+            });
+          }
 
         } catch (error: any) {
           console.error(`Socket ${socket.id}: Server error deleting message:`, error);
@@ -458,8 +485,8 @@ app.prepare().then(() => {
 
       socket.on('typing', (groupId: string, isTyping: boolean) => {
         const userData = connectedUsers.get(socket.id);
-        if (userData && userData.groups.has(groupId)) {
-          io!.to(groupId).emit('userTyping', {
+        if (userData && userData.groups.has(groupId) && io) {
+          io.to(groupId).emit('userTyping', {
             userId: userData.userId,
             isTyping,
             groupId
@@ -471,8 +498,8 @@ app.prepare().then(() => {
         const userData = connectedUsers.get(socket.id);
         if (userData) {
           userConnectionCount.set(userData.userId, (userConnectionCount.get(userData.userId) || 0) - 1);
-          if (userConnectionCount.get(userData.userId) === 0) {
-            io!.emit('userStatusUpdate', { userId: userData.userId, isOnline: false });
+          if (userConnectionCount.get(userData.userId) === 0 && io) {
+            io.emit('userStatusUpdate', { userId: userData.userId, isOnline: false });
           }
           connectedUsers.delete(socket.id);
           console.log(`Socket.IO: Client disconnected - ID: ${socket.id}`);
@@ -490,7 +517,7 @@ app.prepare().then(() => {
           }
           let userId: mongoose.Types.ObjectId;
           try {
-            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
+            const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
             currentUserId = userId.toString();
           } catch (jwtError: any) {
@@ -502,11 +529,15 @@ app.prepare().then(() => {
             socket.emit('messageError', 'غير مصرح لك بالتفاعل في هذه المجموعة.');
             return;
           }
+          
+          // Usar findById en lugar de findOne cuando sea posible
           const message = await Message.findById(messageId);
           if (!message || message.group.toString() !== groupId) {
             socket.emit('messageError', 'الرسالة غير موجودة أو لا تنتمي لهذه المجموعة.');
             return;
           }
+          
+          // Resto del código...
           // تحديث reactions: إذا كان هناك reaction بنفس الإيموجي أضف userId إذا لم يكن موجودًا
           let updated = false;
           if (!message.reactions) message.reactions = [];
@@ -522,12 +553,14 @@ app.prepare().then(() => {
           }
           if (updated) {
             await message.save();
-            io!.to(groupId).emit('reactionAdded', {
-              messageId,
-              emoji,
-              userId: userId.toString(),
-              reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
-            });
+            if (io) {
+              io.to(groupId).emit('reactionAdded', {
+                messageId,
+                emoji,
+                userId: userId.toString(),
+                reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
+              });
+            }
           }
         } catch (error: any) {
           console.error('Error in addReaction:', error);
@@ -546,7 +579,7 @@ app.prepare().then(() => {
           }
           let userId: mongoose.Types.ObjectId;
           try {
-            const decodedToken = jwt.verify(token, JWT_SECRET!) as { id?: string; userId?: string };
+            const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string };
             userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
             currentUserId = userId.toString();
           } catch (jwtError: any) {
@@ -578,12 +611,14 @@ app.prepare().then(() => {
           }
           if (updated) {
             await message.save();
-            io!.to(groupId).emit('reactionRemoved', {
-              messageId,
-              emoji,
-              userId: userId.toString(),
-              reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
-            });
+            if (io) {
+              io.to(groupId).emit('reactionRemoved', {
+                messageId,
+                emoji,
+                userId: userId.toString(),
+                reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
+              });
+            }
           }
         } catch (error: any) {
           console.error('Error in removeReaction:', error);
@@ -620,3 +655,15 @@ app.prepare().then(() => {
     });
   });
 });
+
+
+
+
+
+
+
+
+
+
+
+

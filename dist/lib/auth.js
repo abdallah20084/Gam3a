@@ -3,47 +3,38 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerUser = registerUser;
-exports.verifyOtp = verifyOtp;
-exports.getCurrentUser = getCurrentUser;
-const client_1 = require("@prisma/client");
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const twilio_1 = require("@/config/twilio");
-const prisma = new client_1.PrismaClient();
-const SALT_ROUNDS = 12;
-async function registerUser(data) {
+exports.getValidToken = exports.validateToken = void 0;
+// إضافة دالة للتحقق من صلاحية التوكن
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const validateToken = (token) => {
+    if (!token)
+        return false;
     try {
-        const hashedPassword = await bcryptjs_1.default.hash(data.password, SALT_ROUNDS);
-        const user = await prisma.user.create({
-            data: {
-                name: data.name,
-                phone: data.phone,
-                password: hashedPassword,
-            }
-        });
-        // Send OTP via Twilio/WhatsApp
-        await twilio_1.twilioClient.messages.create({
-            body: `كود التحقق الخاص بك هو: 123456`, // في الواقع سيكون كود عشوائي
-            from: 'whatsapp:+1234567890',
-            to: `whatsapp:${data.phone}`
-        });
-        return { success: true, userId: user.id };
+        // تحقق من صلاحية التوكن بدون التحقق من التوقيع
+        const decoded = jsonwebtoken_1.default.decode(token);
+        if (!decoded)
+            return false;
+        // تحقق من انتهاء صلاحية التوكن
+        const exp = decoded.exp;
+        if (!exp)
+            return false;
+        // تحقق مما إذا كان التوكن منتهي الصلاحية
+        return Date.now() < exp * 1000;
     }
     catch (error) {
-        return { success: false, error: error.message };
+        console.error("Token validation error:", error);
+        return false;
     }
-}
-async function verifyOtp(phone, otp) {
-    // في الواقع سيكون هناك تحقق من صحة OTP
-    if (otp === '123456') {
-        const user = await prisma.user.findUnique({ where: { phone } });
-        return { success: true, user };
+};
+exports.validateToken = validateToken;
+// استخدام هذه الدالة قبل إرسال الطلبات
+const getValidToken = () => {
+    const token = localStorage.getItem('token');
+    if ((0, exports.validateToken)(token)) {
+        return token;
     }
-    return { success: false, error: 'كود التحقق غير صحيح' };
-}
-async function getCurrentUser(sessionToken) {
-    // في الواقع سيكون هناك تحقق من الجلسة
-    return prisma.user.findUnique({
-        where: { id: sessionToken } // مؤقت - سيتم تغييره لنظام جلسات حقيقي
-    });
-}
+    // إذا كان التوكن غير صالح، قم بإزالته
+    localStorage.removeItem('token');
+    return null;
+};
+exports.getValidToken = getValidToken;

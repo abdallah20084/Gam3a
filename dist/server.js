@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// server.ts
+// Agregar definiciones de variables globales al principio del archivo
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const http_1 = require("http");
@@ -47,6 +47,20 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const jwt = __importStar(require("jsonwebtoken"));
 const dompurify_1 = __importDefault(require("dompurify"));
 const jsdom_1 = require("jsdom");
+// Definir variables globales
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is not set.');
+}
+// Variables para Socket.IO
+let io = null;
+// Variables para el servidor Next.js
+const dev = process.env.NODE_ENV !== 'production';
+const app = (0, next_1.default)({ dev });
+const handle = app.getRequestHandler();
+// Estructuras de datos para seguimiento de usuarios
+const connectedUsers = new Map();
+const userConnectionCount = new Map();
 // Setup DOMPurify for server-side sanitization
 const window = new jsdom_1.JSDOM('').window;
 const domPurify = (0, dompurify_1.default)(window);
@@ -56,20 +70,6 @@ const Message_1 = __importDefault(require("./models/Message"));
 const GroupMember_1 = __importDefault(require("./models/GroupMember"));
 const User_1 = __importDefault(require("./models/User"));
 const Group_1 = __importDefault(require("./models/Group"));
-// استخدام process.env.NODE_ENV إذا كان موجودًا، وإلا استخدام 'development'
-const isDev = process.env.NODE_ENV !== 'production';
-const hostname = '0.0.0.0';
-const port = parseInt(process.env.PORT || '3000', 10);
-const app = (0, next_1.default)({ dev: isDev, hostname, port });
-const handle = app.getRequestHandler();
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-    console.error('SERVER STARTUP ERROR: JWT_SECRET environment variable is NOT SET after dotenv.config(). Please check your .env file location and content.');
-    process.exit(1);
-}
-let io;
-const connectedUsers = new Map();
-const userConnectionCount = new Map();
 app.prepare().then(() => {
     console.log('Next.js app prepared. Creating HTTP server...');
     const httpServer = (0, http_1.createServer)((req, res) => {
@@ -164,20 +164,22 @@ app.prepare().then(() => {
                     }
                     userData.groups.add(groupId);
                     userConnectionCount.set(userId.toString(), (userConnectionCount.get(userId.toString()) || 0) + 1);
-                    if (userConnectionCount.get(userId.toString()) === 1) {
+                    if (userConnectionCount.get(userId.toString()) === 1 && io) {
                         io.emit('userStatusUpdate', { userId: userId.toString(), isOnline: true });
                     }
                     // بث رسالة انضمام عضو جديد
-                    io.to(groupId).emit('receiveMessage', {
-                        id: new mongoose_1.default.Types.ObjectId().toString(),
-                        groupId,
-                        senderId: userId.toString(),
-                        senderName: currentUserName,
-                        senderAvatar: null,
-                        content: `🟢 ${currentUserName} انضم إلى المجموعة.`,
-                        timestamp: new Date().toISOString(),
-                        isSystemMessage: true,
-                    });
+                    if (io) {
+                        io.to(groupId).emit('receiveMessage', {
+                            id: new mongoose_1.default.Types.ObjectId().toString(),
+                            groupId,
+                            senderId: userId.toString(),
+                            senderName: currentUserName,
+                            senderAvatar: null,
+                            content: `🟢 ${currentUserName} انضم إلى المجموعة.`,
+                            timestamp: new Date().toISOString(),
+                            isSystemMessage: true,
+                        });
+                    }
                     // جلب الرسائل القديمة
                     const oldMessages = await Message_1.default.find({ group: groupId })
                         .sort({ timestamp: -1 })
@@ -289,7 +291,9 @@ app.prepare().then(() => {
                         type: newMessage.type,
                         replyTo: newMessage.replyTo ? newMessage.replyTo.toString() : undefined,
                     };
-                    io.to(groupId).emit('receiveMessage', messageToSend);
+                    if (io) {
+                        io.to(groupId).emit('receiveMessage', messageToSend);
+                    }
                     console.log(`Socket ${socket.id}: Message sent to group ${groupId} by user ${userId}`);
                 }
                 catch (error) {
@@ -299,10 +303,13 @@ app.prepare().then(() => {
             });
             // New Socket.IO Event: Delete Message
             socket.on('deleteMessage', async (data) => {
+                var _a;
                 try {
                     await (0, db_1.default)();
                     const { messageId, groupId, token } = data;
+                    console.log(`Socket ${socket.id}: Delete message request:`, { messageId, groupId });
                     if (!mongoose_1.default.Types.ObjectId.isValid(messageId) || !mongoose_1.default.Types.ObjectId.isValid(groupId)) {
+                        console.log(`Socket ${socket.id}: Invalid ObjectId - messageId: ${messageId}, groupId: ${groupId}`);
                         socket.emit('messageError', 'معرف رسالة أو مجموعة غير صالح للحذف.');
                         return;
                     }
@@ -317,35 +324,51 @@ app.prepare().then(() => {
                         socket.emit('authError', 'جلسة غير صالحة أو منتهية الصلاحية لحذف الرسالة.');
                         return;
                     }
-                    const messageToDelete = await Message_1.default.findById(messageId).lean();
-                    if (!messageToDelete || messageToDelete.group.toString() !== groupId) {
-                        socket.emit('messageError', 'الرسالة غير موجودة أو لا تنتمي لهذه المجموعة.');
+                    // استخدام findOne بدلاً من findById().lean()
+                    const messageToDelete = await Message_1.default.findOne({ _id: new mongoose_1.default.Types.ObjectId(messageId) }).lean();
+                    console.log(`Socket ${socket.id}: Message found:`, {
+                        messageExists: !!messageToDelete,
+                        messageGroupId: (_a = messageToDelete === null || messageToDelete === void 0 ? void 0 : messageToDelete.group) === null || _a === void 0 ? void 0 : _a.toString(),
+                        requestGroupId: groupId
+                    });
+                    if (!messageToDelete) {
+                        // إذا كانت الرسالة غير موجودة، أرسل حدث الحذف للعميل لإزالتها من الواجهة
+                        console.log(`Socket ${socket.id}: Message ${messageId} not found in database, removing from frontend`);
+                        const deleterUser = await User_1.default.findById(userId, { name: 1 }).lean();
+                        const deleterName = (deleterUser === null || deleterUser === void 0 ? void 0 : deleterUser.name) || 'مستخدم غير معروف';
+                        if (io) {
+                            io.to(groupId).emit('messageDeleted', {
+                                messageId,
+                                deletedBy: deleterName,
+                                isAdmin: false
+                            });
+                        }
                         return;
                     }
-                    // حل مؤقت باستخدام any
-                    // @ts-ignore
-                    const groupDoc = await Group_1.default.findOne({ _id: groupId });
+                    if (messageToDelete.group.toString() !== groupId) {
+                        socket.emit('messageError', 'الرسالة لا تنتمي لهذه المجموعة.');
+                        return;
+                    }
+                    // التحقق من صلاحية الحذف - صاحب الرسالة أو المدير
+                    const groupDoc = await Group_1.default.findOne({ _id: new mongoose_1.default.Types.ObjectId(groupId) });
                     const isGroupAdmin = (groupDoc === null || groupDoc === void 0 ? void 0 : groupDoc.admin) && groupDoc.admin.equals(userId);
-                    if (!isGroupAdmin) {
-                        socket.emit('messageError', 'غير مصرح لك بحذف هذه الرسالة. فقط المدير يمكنه الحذف.');
+                    const isMessageOwner = messageToDelete.sender.toString() === userId.toString();
+                    if (!isGroupAdmin && !isMessageOwner) {
+                        socket.emit('messageError', 'غير مصرح لك بحذف هذه الرسالة. فقط صاحب الرسالة أو المدير يمكنه الحذف.');
                         return;
                     }
-                    await Message_1.default.deleteOne({ _id: messageId });
+                    // استخدام Model.deleteOne مع تحديد النوع
+                    await Message_1.default.deleteOne({ _id: new mongoose_1.default.Types.ObjectId(messageId) });
                     console.log(`Socket ${socket.id}: Message ${messageId} deleted by user ${userId} in group ${groupId}.`);
                     const deleterUser = await User_1.default.findById(userId, { name: 1 }).lean();
                     const deleterName = (deleterUser === null || deleterUser === void 0 ? void 0 : deleterUser.name) || 'مستخدم غير معروف';
-                    const systemMessage = {
-                        id: new mongoose_1.default.Types.ObjectId().toString(),
-                        groupId: groupId,
-                        senderId: userId.toString(),
-                        senderName: deleterName,
-                        senderAvatar: null,
-                        content: `قام ${deleterName} بحذف رسالة.`,
-                        timestamp: new Date().toISOString(),
-                        isSystemMessage: true,
-                        type: 'system',
-                    };
-                    io.to(groupId).emit('messageDeleted', { messageId, systemMessage });
+                    if (io) {
+                        io.to(groupId).emit('messageDeleted', {
+                            messageId,
+                            deletedBy: deleterName,
+                            isAdmin: isGroupAdmin
+                        });
+                    }
                 }
                 catch (error) {
                     console.error(`Socket ${socket.id}: Server error deleting message:`, error);
@@ -406,7 +429,7 @@ app.prepare().then(() => {
             });
             socket.on('typing', (groupId, isTyping) => {
                 const userData = connectedUsers.get(socket.id);
-                if (userData && userData.groups.has(groupId)) {
+                if (userData && userData.groups.has(groupId) && io) {
                     io.to(groupId).emit('userTyping', {
                         userId: userData.userId,
                         isTyping,
@@ -418,7 +441,7 @@ app.prepare().then(() => {
                 const userData = connectedUsers.get(socket.id);
                 if (userData) {
                     userConnectionCount.set(userData.userId, (userConnectionCount.get(userData.userId) || 0) - 1);
-                    if (userConnectionCount.get(userData.userId) === 0) {
+                    if (userConnectionCount.get(userData.userId) === 0 && io) {
                         io.emit('userStatusUpdate', { userId: userData.userId, isOnline: false });
                     }
                     connectedUsers.delete(socket.id);
@@ -449,11 +472,13 @@ app.prepare().then(() => {
                         socket.emit('messageError', 'غير مصرح لك بالتفاعل في هذه المجموعة.');
                         return;
                     }
+                    // Usar findById en lugar de findOne cuando sea posible
                     const message = await Message_1.default.findById(messageId);
                     if (!message || message.group.toString() !== groupId) {
                         socket.emit('messageError', 'الرسالة غير موجودة أو لا تنتمي لهذه المجموعة.');
                         return;
                     }
+                    // Resto del código...
                     // تحديث reactions: إذا كان هناك reaction بنفس الإيموجي أضف userId إذا لم يكن موجودًا
                     let updated = false;
                     if (!message.reactions)
@@ -471,12 +496,14 @@ app.prepare().then(() => {
                     }
                     if (updated) {
                         await message.save();
-                        io.to(groupId).emit('reactionAdded', {
-                            messageId,
-                            emoji,
-                            userId: userId.toString(),
-                            reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
-                        });
+                        if (io) {
+                            io.to(groupId).emit('reactionAdded', {
+                                messageId,
+                                emoji,
+                                userId: userId.toString(),
+                                reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
+                            });
+                        }
                     }
                 }
                 catch (error) {
@@ -529,12 +556,14 @@ app.prepare().then(() => {
                     }
                     if (updated) {
                         await message.save();
-                        io.to(groupId).emit('reactionRemoved', {
-                            messageId,
-                            emoji,
-                            userId: userId.toString(),
-                            reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
-                        });
+                        if (io) {
+                            io.to(groupId).emit('reactionRemoved', {
+                                messageId,
+                                emoji,
+                                userId: userId.toString(),
+                                reactions: message.reactions.map(r => ({ emoji: r.emoji, users: r.users.map(u => u.toString()) }))
+                            });
+                        }
                     }
                 }
                 catch (error) {

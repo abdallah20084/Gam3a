@@ -1,18 +1,60 @@
 'use client';
-
-import { useState, useRef, useEffect } from 'react';
-import { contentFilter, ContentFilterResult } from '@/lib/contentFilter';
-import { videoProcessor } from '@/lib/videoProcessor';
+import { useState } from 'react';
+import * as nsfwjs from 'nsfwjs';
+import * as tf from '@tensorflow/tfjs';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
 
 interface VideoUploadWithCheckProps {
-  onUploadSuccess?: (file: File, result: ContentFilterResult, thumbnail?: string) => void;
+  onUploadSuccess?: (file: File) => void;
   onUploadError?: (error: string) => void;
-  maxFileSize?: number; // بالبايت
+  maxFileSize?: number;
   allowedTypes?: string[];
   showPreview?: boolean;
   autoUpload?: boolean;
   compressLargeVideos?: boolean;
-  maxCompressedSize?: number; // بالبايت
+  maxCompressedSize?: number;
+}
+
+const ffmpeg = new FFmpeg();
+
+// دالة استخراج لقطة من الفيديو
+async function extractFrameFromVideo(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.src = URL.createObjectURL(file);
+    video.currentTime = 1;
+
+    video.onloadeddata = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const img = new Image();
+      img.src = canvas.toDataURL();
+      img.onload = () => resolve(img);
+    };
+  });
+}
+
+// دالة ضغط الفيديو
+async function convertTo360p(file: File): Promise<Blob> {
+  if (!ffmpeg.loaded) await ffmpeg.load();
+
+  ffmpeg.writeFile(file.name, await fetchFile(file));
+
+  await ffmpeg.exec([
+    '-i', file.name,
+    '-vf', 'scale=-2:360',
+    '-preset', 'fast',
+    'out.mp4'
+  ]);
+
+  const data = ffmpeg.readFile('out.mp4');
+  return new Blob([data], { type: 'video/mp4' });
 }
 
 export default function VideoUploadWithCheck({
@@ -27,38 +69,8 @@ export default function VideoUploadWithCheck({
 }: VideoUploadWithCheckProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("");
+  const [status, setStatus] = useState<string>("لا توجد عملية حالياً");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [filterResult, setFilterResult] = useState<ContentFilterResult | null>(null);
-  const [filterStatus, setFilterStatus] = useState<'idle' | 'loading' | 'loaded' | 'fallback'>('idle');
-  const [videoInfo, setVideoInfo] = useState<any>(null);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // تحميل النماذج عند بدء المكون
-  useEffect(() => {
-    const loadModels = async () => {
-      try {
-        setFilterStatus('loading');
-        
-        // تحميل FFmpeg
-        await videoProcessor.load();
-        
-        // محاولة تحميل نموذج الفلترة
-        const filterSuccess = await contentFilter.tryLoad();
-        
-        setFilterStatus(filterSuccess ? 'loaded' : 'fallback');
-        console.log('Models loaded:', { filterSuccess });
-      } catch (error) {
-        console.error('Failed to load models:', error);
-        setFilterStatus('fallback');
-      }
-    };
-
-    loadModels();
-  }, []);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -97,50 +109,52 @@ export default function VideoUploadWithCheck({
     }
 
     setIsProcessing(true);
-    setProgress(0);
-    setStatus("جاري تحليل الفيديو...");
+    setStatus("فحص الفيديو... استخراج لقطة أولى");
 
     try {
-      // 1. تحليل معلومات الفيديو
-      setProgress(10);
-      setStatus("جاري تحليل معلومات الفيديو...");
-      const info = await videoProcessor.getVideoInfo(file);
-      setVideoInfo(info);
+      // استخراج لقطة من الفيديو
+      const frame = await extractFrameFromVideo(file);
+      
+      // تحميل نموذج NSFW.js
+      const model = await nsfwjs.load();
+      
+      // فحص اللقطة
+      const predictions = await model.classify(frame);
+      const unsafe = predictions.find(
+        (p) =>
+          (p.className === 'Porn' && p.probability > 0.5) ||
+          (p.className === 'Sexy' && p.probability > 0.5)
+      );
 
-      // 2. فحص المحتوى
-      setProgress(30);
-      setStatus("جاري فحص المحتوى...");
-      const videoCheck = await contentFilter.isVideoSafe(file, 3);
-      setFilterResult(videoCheck.frameResults[0]);
-
-      if (!videoCheck.isSafe) {
-        setProgress(100);
-        setStatus("⚠️ الفيديو يحتوي على محتوى غير مناسب ولن يتم رفعه.");
+      if (unsafe) {
+        setStatus("⚠️ الفيديو يحتوي على محتوى غير لائق. تم رفضه.");
         onUploadError?.('الفيديو يحتوي على محتوى غير مناسب');
         return;
       }
 
-      // 3. إنشاء thumbnail
-      setProgress(50);
-      setStatus("جاري إنشاء صورة مصغرة...");
-      const thumbnail = await videoProcessor.generateThumbnail(file, '00:00:01');
-      const thumbnailUrl = URL.createObjectURL(thumbnail);
-      setThumbnailUrl(thumbnailUrl);
+      let uploadFile = file;
 
-      // 4. معالجة الفيديو (ضغط إذا كان كبيراً)
-      let processedFile = file;
-      if (compressLargeVideos && file.size > maxCompressedSize) {
-        setProgress(70);
-        setStatus("جاري ضغط الفيديو...");
-        processedFile = await videoProcessor.compressVideo(file, maxCompressedSize / (1024 * 1024));
+      // فحص حجم الفيديو وضغطه إذا كان كبيراً
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(file);
+      await new Promise((resolve) => (video.onloadedmetadata = resolve));
+      const height = video.videoHeight;
+
+      if (height > 360 && compressLargeVideos) {
+        setStatus("يتم ضغط الفيديو إلى 360p...");
+        const compressed = await convertTo360p(file);
+        uploadFile = new File([compressed], 'compressed.mp4', {
+          type: 'video/mp4',
+        });
+      } else if (height > 360) {
+        setStatus("الفيديو أقل من 360p، لا حاجة للضغط.");
       }
 
-      setProgress(90);
-      setStatus("جاري رفع الفيديو...");
+      setStatus("⬆️ يتم رفع الملف...");
 
-      // 5. رفع الملف
+      // رفع الملف
       const formData = new FormData();
-      formData.append("file", processedFile);
+      formData.append("file", uploadFile);
 
       const response = await fetch("/api/upload-media", {
         method: "POST",
@@ -152,9 +166,8 @@ export default function VideoUploadWithCheck({
       }
 
       const data = await response.json();
-      setProgress(100);
-      setStatus("✅ تم رفع الفيديو بنجاح.");
-      onUploadSuccess?.(processedFile, videoCheck.frameResults[0], thumbnailUrl);
+      setStatus("✅ تم الرفع: " + data.message);
+      onUploadSuccess?.(uploadFile);
 
     } catch (error) {
       console.error('Upload error:', error);
@@ -173,7 +186,7 @@ export default function VideoUploadWithCheck({
       const selectedFile = files[0];
       if (allowedTypes.includes(selectedFile.type)) {
         // محاكاة اختيار الملف
-        const input = fileInputRef.current;
+        const input = event.currentTarget.querySelector('input[type="file"]') as HTMLInputElement;
         if (input) {
           const dataTransfer = new DataTransfer();
           dataTransfer.items.add(selectedFile);
@@ -190,57 +203,10 @@ export default function VideoUploadWithCheck({
     event.preventDefault();
   };
 
-  const handleClick = () => {
-    fileInputRef.current?.click();
-  };
-
   const clearFile = () => {
     setFile(null);
     setPreviewUrl(null);
-    setThumbnailUrl(null);
-    setFilterResult(null);
-    setVideoInfo(null);
     setStatus("");
-    setProgress(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const getCategoryColor = (category: string, probability: number) => {
-    if (probability > 0.7) return 'danger';
-    if (probability > 0.5) return 'warning';
-    if (probability > 0.3) return 'info';
-    return 'success';
-  };
-
-  const getCategoryName = (category: string) => {
-    const names: { [key: string]: string } = {
-      'Drawing': 'رسوم',
-      'Hentai': 'هنتاي',
-      'Neutral': 'محايد',
-      'Porn': 'إباحي',
-      'Sexy': 'مثير'
-    };
-    return names[category] || category;
-  };
-
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const formatFileSize = (bytes: number) => {
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    if (bytes === 0) return '0 Bytes';
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   return (
@@ -249,193 +215,98 @@ export default function VideoUploadWithCheck({
         <div className="card-header">
           <h6 className="mb-0">
             <i className="bi bi-camera-video me-2"></i>
-            رفع الفيديوهات مع فحص المحتوى
+            رفع الفيديو مع فحص المحتوى
           </h6>
         </div>
         <div className="card-body">
-          {/* مؤشر حالة الفلتر */}
           <div className="alert alert-info mb-3">
             <small>
               <i className="bi bi-info-circle me-1"></i>
-              <strong>حالة الفلتر:</strong>
-              <span className={`ms-2 badge ${
-                filterStatus === 'loaded' ? 'bg-success' :
-                filterStatus === 'loading' ? 'bg-warning' :
-                filterStatus === 'fallback' ? 'bg-warning' :
-                'bg-secondary'
-              }`}>
-                {filterStatus === 'loaded' ? 'النموذج المتقدم' :
-                 filterStatus === 'loading' ? 'جاري التحميل...' :
-                 filterStatus === 'fallback' ? 'النظام المحلي' :
-                 'غير محدد'}
-              </span>
+              <strong>معلومات:</strong> يتم فحص الفيديو في المتصفح باستخدام NSFW.js قبل الرفع
             </small>
           </div>
 
-          {/* منطقة رفع الملفات */}
-          <div 
-            className={`upload-area ${isProcessing ? 'processing' : ''}`}
+          <div
+            className="upload-area"
             onDrop={handleDrop}
             onDragOver={handleDragOver}
-            onClick={handleClick}
-            style={{
-              border: '2px dashed #ccc',
-              borderRadius: '8px',
-              padding: '20px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease'
-            }}
+            onClick={() => document.getElementById('video-input')?.click()}
           >
             <input
-              ref={fileInputRef}
+              id="video-input"
               type="file"
               accept={allowedTypes.join(',')}
               onChange={handleFileSelect}
               style={{ display: 'none' }}
             />
             
-            {isProcessing ? (
-              <div>
-                <div className="spinner-border text-primary mb-2" role="status">
-                  <span className="visually-hidden">جاري التحميل...</span>
-                </div>
-                <h6>{status}</h6>
-                <div className="progress mt-2" style={{ height: '8px' }}>
-                  <div 
-                    className="progress-bar" 
-                    style={{ width: `${progress}%` }}
-                  ></div>
-                </div>
-                <p className="small text-muted mt-2">{progress}% مكتمل</p>
+            {!file ? (
+              <div className="upload-placeholder">
+                <i className="bi bi-camera-video fs-1 text-muted"></i>
+                <p className="mt-2 mb-0">اضغط هنا أو اسحب الفيديو لرفعه</p>
+                <small className="text-muted">
+                  الأنواع المدعومة: MP4, WebM, AVI, MOV
+                </small>
               </div>
             ) : (
-              <div>
-                <i className="bi bi-cloud-upload display-6 text-muted mb-3"></i>
-                <h6>اسحب وأفلت الفيديو هنا</h6>
-                <p className="small text-muted mb-2">أو انقر لاختيار ملف</p>
-                <div className="mb-2">
-                  {allowedTypes.map(type => (
-                    <span key={type} className="badge bg-secondary me-1">
-                      {type.split('/')[1].toUpperCase()}
-                    </span>
-                  ))}
-                </div>
+              <div className="file-selected">
+                {showPreview && previewUrl && (
+                  <video 
+                    src={previewUrl} 
+                    controls
+                    className="img-thumbnail mb-2"
+                    style={{ maxHeight: '200px' }}
+                  />
+                )}
+                <p className="mb-1"><strong>{file.name}</strong></p>
                 <small className="text-muted">
-                  الحد الأقصى: {(maxFileSize / (1024 * 1024)).toFixed(1)}MB
+                  {(file.size / (1024 * 1024)).toFixed(2)} MB
                 </small>
               </div>
             )}
           </div>
 
-          {/* معاينة الفيديو */}
-          {previewUrl && showPreview && (
+          {file && (
             <div className="mt-3">
-              <h6>معاينة الفيديو:</h6>
-              <video 
-                src={previewUrl} 
-                controls 
-                className="img-fluid rounded"
-                style={{ maxHeight: '200px' }}
-              />
-            </div>
-          )}
-
-          {/* معلومات الفيديو */}
-          {videoInfo && (
-            <div className="mt-3">
-              <h6>معلومات الفيديو:</h6>
-              <div className="row">
-                <div className="col-md-6">
-                  <small><strong>المدة:</strong> {formatDuration(videoInfo.duration)}</small><br />
-                  <small><strong>الحجم:</strong> {formatFileSize(videoInfo.fileSize)}</small>
-                </div>
-                <div className="col-md-6">
-                  <small><strong>الدقة:</strong> {videoInfo.width}x{videoInfo.height}</small><br />
-                  <small><strong>معدل الإطارات:</strong> {videoInfo.fps} FPS</small>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* الصورة المصغرة */}
-          {thumbnailUrl && (
-            <div className="mt-3">
-              <h6>الصورة المصغرة:</h6>
-              <img 
-                src={thumbnailUrl} 
-                alt="صورة مصغرة" 
-                className="img-fluid rounded"
-                style={{ maxHeight: '150px', objectFit: 'cover' }}
-              />
-            </div>
-          )}
-
-          {/* نتائج الفحص */}
-          {filterResult && (
-            <div className="mt-3">
-              <h6>نتائج الفحص:</h6>
+              <button
+                onClick={handleCheckAndUpload}
+                disabled={isProcessing}
+                className="btn btn-primary me-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2"></span>
+                    جاري الفحص...
+                  </>
+                ) : (
+                  <>
+                    <i className="bi bi-shield-check me-2"></i>
+                    فحص ورفع
+                  </>
+                )}
+              </button>
               
-              {/* حالة الأمان */}
-              <div className={`alert ${filterResult.isSafe ? 'alert-success' : 'alert-danger'} mb-3`}>
-                <i className={`bi ${filterResult.isSafe ? 'bi-check-circle' : 'bi-exclamation-triangle'} me-2`}></i>
-                <strong>
-                  {filterResult.isSafe ? 'الفيديو آمن' : 'الفيديو يحتوي على محتوى غير مناسب'}
-                </strong>
-                <br />
-                <small>مستوى الثقة: {(filterResult.confidence * 100).toFixed(1)}%</small>
-              </div>
-
-              {/* تفاصيل التصنيفات */}
-              <div className="categories-breakdown">
-                <small className="text-muted">التصنيفات:</small>
-                {Object.entries(filterResult.categories).map(([category, probability]) => (
-                  <div key={category} className="d-flex justify-content-between align-items-center mb-1">
-                    <span>{getCategoryName(category)}:</span>
-                    <div className="d-flex align-items-center">
-                      <div className="progress me-2" style={{ width: '60px', height: '6px' }}>
-                        <div 
-                          className={`progress-bar bg-${getCategoryColor(category, probability)}`}
-                          style={{ width: `${probability * 100}%` }}
-                        ></div>
-                      </div>
-                      <small>{(probability * 100).toFixed(1)}%</small>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <button
+                onClick={clearFile}
+                disabled={isProcessing}
+                className="btn btn-outline-secondary"
+              >
+                <i className="bi bi-x-circle me-2"></i>
+                إلغاء
+              </button>
             </div>
           )}
 
-          {/* أزرار التحكم */}
-          <div className="mt-3 d-flex gap-2">
-            {file && !isProcessing && (
-              <>
-                <button 
-                  onClick={handleCheckAndUpload}
-                  className="btn btn-primary"
-                  disabled={isProcessing}
-                >
-                  <i className="bi bi-shield-check me-2"></i>
-                  فحص ورفع
-                </button>
-                <button 
-                  onClick={clearFile}
-                  className="btn btn-outline-secondary"
-                >
-                  <i className="bi bi-trash me-2"></i>
-                  مسح
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* رسالة الحالة */}
           {status && (
             <div className="mt-3">
-              <p className={`mb-0 ${status.includes('✅') ? 'text-success' : status.includes('⚠️') ? 'text-warning' : status.includes('❌') ? 'text-danger' : 'text-info'}`}>
-                {status}
-              </p>
+              <div className={`alert ${
+                status.includes('✅') ? 'alert-success' :
+                status.includes('⚠️') ? 'alert-warning' :
+                status.includes('❌') ? 'alert-danger' :
+                'alert-info'
+              }`}>
+                <small>{status}</small>
+              </div>
             </div>
           )}
         </div>

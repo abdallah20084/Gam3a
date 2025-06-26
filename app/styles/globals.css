@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 body {
   font-family: 'Tajawal', sans-serif;
   padding-bottom: 60px; /* لمنع تغطية المحتوى بواسطة شريط التنقل */
@@ -154,4 +158,253 @@ body {
 }
 
 /* Global Styles */
+
+/* Custom styles for the chat interface */
+.chat-message-bubble {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.chat-message-bubble:hover {
+  @apply shadow-md;
+}
+
+.typing-indicator {
+  @apply animate-pulse;
+}
+
+.online-indicator {
+  @apply bg-green-500;
+}
+
+.offline-indicator {
+  @apply bg-gray-400;
+}
+
+/* Smooth scrolling for chat */
+.chat-container {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for chat */
+.chat-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.chat-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Message animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-enter {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Hover effects for images */
+.image-hover {
+  @apply transition-transform duration-200 ease-in-out;
+}
+
+.image-hover:hover {
+  @apply scale-105;
+}
+
+/* Button hover effects */
+.btn-hover {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.btn-hover:hover {
+  @apply transform scale-105;
+}
+
+/* Input focus effects */
+.input-focus {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.input-focus:focus {
+  @apply ring-2 ring-blue-500 ring-opacity-50;
+}
+
+/* Avatar gradient backgrounds */
+.avatar-gradient-1 {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.avatar-gradient-2 {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.avatar-gradient-3 {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.avatar-gradient-4 {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.avatar-gradient-5 {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+/* Reaction button styles */
+.reaction-button {
+  @apply transition-all duration-150 ease-in-out;
+}
+
+.reaction-button:hover {
+  @apply transform scale-110;
+}
+
+.reaction-button.active {
+  @apply bg-blue-100 text-blue-700;
+}
+
+/* Modal animations */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modal-enter {
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+/* Tab styles */
+.tab-active {
+  @apply border-blue-500 text-blue-600;
+}
+
+.tab-inactive {
+  @apply border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300;
+}
+
+/* Loading spinner */
+.spinner {
+  @apply animate-spin rounded-full border-2 border-gray-300 border-t-blue-600;
+}
+
+/* Status indicators */
+.status-online {
+  @apply bg-green-500;
+}
+
+.status-offline {
+  @apply bg-gray-400;
+}
+
+.status-typing {
+  @apply bg-yellow-500;
+}
+
+/* Message timestamp */
+.message-timestamp {
+  @apply text-xs text-gray-500 opacity-75;
+}
+
+/* File attachment styles */
+.file-attachment {
+  @apply inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors;
+}
+
+/* Emoji picker positioning */
+.emoji-picker-container {
+  @apply absolute bottom-full right-0 mb-2 z-10;
+}
+
+/* Reply preview styles */
+.reply-preview {
+  @apply bg-blue-50 border-r-4 border-blue-500 rounded-lg p-3 mb-3;
+}
+
+/* Send button states */
+.send-button {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.send-button:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.send-button:not(:disabled):hover {
+  @apply transform scale-105;
+}
+
+/* Member list styles */
+.member-item {
+  @apply transition-all duration-150 ease-in-out;
+}
+
+.member-item:hover {
+  @apply bg-gray-50 rounded-lg;
+}
+
+/* Group header styles */
+.group-header {
+  @apply bg-white rounded-lg shadow-sm p-6 mb-4;
+}
+
+/* Chat container styles */
+.chat-container {
+  @apply bg-white rounded-lg shadow-sm;
+}
+
+/* Input area styles */
+.input-area {
+  @apply border-t border-gray-200 p-4;
+}
+
+/* Message bubble styles */
+.message-bubble-sent {
+  @apply bg-blue-600 text-white rounded-2xl rounded-br-md;
+}
+
+.message-bubble-received {
+  @apply bg-white text-gray-900 border border-gray-200 rounded-2xl rounded-bl-md;
+}
+
+/* Avatar styles */
+.avatar-container {
+  @apply w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium;
+}
+
+/* Typing indicator dots */
+.typing-dot {
+  @apply w-2 h-2 bg-gray-400 rounded-full animate-bounce;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.2s;
+}
 

@@ -124,9 +124,6 @@ export default function Navbar() {
               <Link href="/features" className="nav-link shadow-hover fw-bold fs-4 text-dark">مميزات التطبيق</Link>
             </li>
             <li className="nav-item">
-              <Link href="/media-processing" className="nav-link shadow-hover fw-bold fs-4 text-dark">معالجة الوسائط</Link>
-            </li>
-            <li className="nav-item">
               <Link href="/test-upload" className="nav-link shadow-hover fw-bold fs-4 text-dark">اختبار الرفع</Link>
             </li>
             {isLoggedIn && (

@@ -1,600 +1,1200 @@
-// components/GroupChat.tsx
-"use client";
-
-import { useEffect, useState, useRef } from "react";
-import { io } from "socket.io-client";
-import DOMPurify from "dompurify";
-import Picker from '@emoji-mart/react';
+// تحسين تصميم صفحة الدردشة بشكل كامل
+import React, { useState, useEffect, useRef } from 'react';
+import { FaSearch, FaEllipsisV, FaImage, FaVideo, FaFileAlt, FaMicrophone, FaRegSmile, FaPaperPlane, FaTimes, FaEdit, FaTrash } from 'react-icons/fa';
 import data from '@emoji-mart/data';
-import { motion, AnimatePresence } from 'framer-motion';
-
-// نوع placeholder مؤقت للسوكيت إذا كنت لا تزال تواجه مشاكل في TypeScript.
-// إذا تم حل مشاكل أنواع Socket.IO، يمكنك استخدام import { Socket } from 'socket.io-client';
-// ثم استخدام Socket بدلاً من ClientSocket.
-type ClientSocket = any;
-
-// تعريف نوع الرسالة المستخدم داخلياً
-interface Message {
-  id: string;
-  groupId: string;
-  sender: string;
-  content: string;
-  type?: string;
-  timestamp: string;
-  senderName?: string;
-  senderAvatar?: string | null;
-  reactions?: { emoji: string; users: string[] }[];
-  replyTo?: string;
-  replyToContent?: string;
-  replyToSenderName?: string;
-}
+import Picker from '@emoji-mart/react';
+import DOMPurify from 'dompurify';
+import io from 'socket.io-client';
+import Image from 'next/image';
 
 interface GroupChatProps {
   groupId: string;
   userId: string;
-  members?: Array<{
-    id: string;
-    name: string;
-    avatar?: string | null;
-  }>;
+  members: any[];
+  initialMessages?: any[];
+  groupName?: string; // إضافة اسم المجموعة كخاصية
+  isAdmin?: boolean; // إضافة معلومة الأدمن
 }
 
-const GroupChat: React.FC<GroupChatProps> = ({ groupId, userId, members = [] }) => {
-  // استخدام useState لإدارة مثيل السوكيت
-  const [socket, setSocket] = useState<ClientSocket | null>(null);
-  const [messageInput, setMessageInput] = useState<string>('');
-  const [messages, setMessages] = useState<Message[]>([]); // لتخزين الرسائل المستلمة
+const GroupChat: React.FC<GroupChatProps> = ({
+  groupId,
+  userId,
+  members = [],
+  initialMessages = [],
+  groupName = "المجموعة", // إضافة اسم المجموعة كخاصية
+  isAdmin = false // إضافة معلومة الأدمن
+}) => {
+  // State variables
+  const [messages, setMessages] = useState(initialMessages || []);
+
+
+  const [messageInput, setMessageInput] = useState('');
+  const [isConnected, setIsConnected] = useState(false);
+  const [socket, setSocket] = useState<any>(null);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [isTyping, setIsTyping] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
-  const [replyToMsg, setReplyToMsg] = useState<Message | null>(null);
-  const [activeReactionMsgId, setActiveReactionMsgId] = useState<string | null>(null);
+  const [replyToMsg, setReplyToMsg] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('chat');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingMessage, setEditingMessage] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [messageDropdowns, setMessageDropdowns] = useState<{[key: string]: boolean}>({});
   
+  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Filtered messages based on active tab - fix for undefined messages
+  const filteredMessages = (messages || []).filter(msg => {
+    if (activeTab === 'chat') return true;
+    if (activeTab === 'images') return msg.type === 'image';
+    if (activeTab === 'videos') return msg.type === 'video';
+    if (activeTab === 'files') return msg.type === 'file' || msg.type === 'pdf';
+    return true;
+  });
 
-  // دالة تمرير الشات للأسفل تلقائياً
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // Socket connection and event handlers
+  useEffect(() => {
+    // Socket connection logic
+    const socketInitializer = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('No token found for socket connection');
+          return;
+        }
 
-  // إغلاق emoji picker عند النقر خارجه
+        const socketInstance = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000', {
+          path: '/api/socket',
+          query: { token, groupId }
+        });
+
+        socketInstance.on('connect', () => {
+          console.log('Connected to socket server');
+          setIsConnected(true);
+          // Join the group room
+          socketInstance.emit('joinGroup', groupId, token);
+        });
+
+        socketInstance.on('disconnect', () => {
+          console.log('Disconnected from socket server');
+          setIsConnected(false);
+        });
+
+        socketInstance.on('receiveMessage', (message) => {
+          setMessages(prev => {
+            const prevMessages = prev || [];
+            // تأكد إن الرسالة مش موجودة فعلاً
+            const messageExists = prevMessages.some(msg => msg.id === message.id);
+            if (messageExists) {
+              return prevMessages;
+            }
+            return [...prevMessages, message];
+          });
+        });
+
+        socketInstance.on('userStatusUpdate', ({ userId, isOnline }) => {
+          setOnlineUsers(prev => {
+            const newSet = new Set(prev);
+            if (isOnline) {
+              newSet.add(userId);
+            } else {
+              newSet.delete(userId);
+            }
+            return newSet;
+          });
+        });
+
+        // Handle socket errors
+        socketInstance.on('messageError', (error) => {
+          console.error('Message error:', error);
+          alert(error);
+        });
+
+        socketInstance.on('authError', (error) => {
+          console.error('Auth error:', error);
+          alert(error);
+        });
+
+        socketInstance.on('typing', ({ userId, typing }) => {
+          setTypingUsers(prev => {
+            const newSet = new Set(prev);
+            if (typing) {
+              newSet.add(userId);
+            } else {
+              newSet.delete(userId);
+            }
+            return newSet;
+          });
+        });
+
+        // Handle message edited
+        socketInstance.on('messageEdited', ({ messageId, newContent, isEdited }) => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, content: newContent, isEdited: true }
+              : msg
+          ));
+        });
+
+        // Handle message deleted
+        socketInstance.on('messageDeleted', ({ messageId, deletedBy }) => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, content: `تم حذف هذه الرسالة بواسطة ${deletedBy}`, isDeleted: true, type: 'text' }
+              : msg
+          ));
+        });
+
+        setSocket(socketInstance);
+
+        return () => {
+          socketInstance.disconnect();
+        };
+      } catch (error) {
+        console.error('Socket initialization error:', error);
+      }
+    };
+
+    socketInitializer();
+  }, [groupId]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
         setShowEmoji(false);
       }
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+      // Close message dropdowns when clicking outside
+      const target = event.target as Element;
+      if (!target.closest('.dropdown')) {
+        setMessageDropdowns({});
+      }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
-  useEffect(() => {
-    // تأكد من أن السوكيت لم يتم تهيئته بالفعل
+  // Handle sending message
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('handleSendMessage called', { messageInput, socket: !!socket, isConnected });
+
+    if (!messageInput.trim()) {
+      console.log('Message is empty');
+      return;
+    }
+
     if (!socket) {
-      // عنوان خادم السوكيت. يجب أن يتطابق مع URL الواجهة الأمامية الخاصة بك.
-      const SOCKET_SERVER_URL = process.env.NEXT_PUBLIC_SOCKET_SERVER_URL || 'http://localhost:3000';
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
-      // إنشاء مثيل سوكيت جديد
-      const newSocket: ClientSocket = io(SOCKET_SERVER_URL, {
-        path: "/api/socket", // هذا المسار بالغ الأهمية ويجب أن يتطابق مع مسار API Route
-        transports: ['websocket'], // يمكن أن يساعد في فرض استخدام WebSockets
-      });
-
-      setSocket(newSocket); // تخزين مثيل السوكيت في الحالة
-
-      // الاستماع لحدث الاتصال
-      newSocket.on("connect", () => {
-        console.log("Socket connected:", newSocket.id);
-        // الانضمام إلى المجموعة بمجرد الاتصال
-        newSocket.emit("joinGroup", groupId, token);
-      });
-
-      // الاستماع للرسائل الواردة من الخادم
-      newSocket.on("receiveMessage", (msg: any) => {
-        console.log("Received message:", msg);
-        setMessages((prev) => [
-          ...prev,
-          {
-            ...msg,
-            senderName: msg.senderName || 'مستخدم غير معروف',
-            senderAvatar: msg.senderAvatar || null,
-          }
-        ]);
-      });
-
-      // الاستماع لتحديثات حالة المستخدمين
-      newSocket.on("userStatusUpdate", (data: { userId: string; isOnline: boolean }) => {
-        setOnlineUsers(prev => {
-          const newSet = new Set(prev);
-          if (data.isOnline) {
-            newSet.add(data.userId);
-          } else {
-            newSet.delete(data.userId);
-          }
-          return newSet;
-        });
-      });
-
-      // الاستماع لإضافة التفاعلات
-      newSocket.on("reactionAdded", (data: { messageId: string; emoji: string; userId: string; reactions: { emoji: string; users: string[] }[] }) => {
-        setMessages(prev => prev.map(msg => 
-          msg.id === data.messageId 
-            ? { ...msg, reactions: data.reactions }
-            : msg
-        ));
-      });
-
-      // الاستماع لإزالة التفاعلات
-      newSocket.on("reactionRemoved", (data: { messageId: string; emoji: string; userId: string; reactions: { emoji: string; users: string[] }[] }) => {
-        setMessages(prev => prev.map(msg => 
-          msg.id === data.messageId 
-            ? { ...msg, reactions: data.reactions }
-            : msg
-        ));
-      });
-
-      // الاستماع لأخطاء الاتصال
-      newSocket.on("connect_error", () => {});
-
-      // دالة التنظيف: قطع الاتصال عند إلغاء تحميل المكون
-      return () => {
-        console.log("Disconnecting socket...");
-        newSocket.disconnect();
-      };
+      console.log('Socket not connected');
+      return;
     }
-    // إذا كان السوكيت موجودًا بالفعل، لا تفعل شيئًا لمنع إعادة التهيئة المزدوجة
-    return () => {};
-  }, [groupId, socket]); // أضف groupId كـ dependency إذا كان يمكن أن يتغير في عمر المكون
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // دالة إرسال رسالة نصية مع النوع
-  const handleSendMessage = () => {
-    if (socket && messageInput.trim()) {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      socket.emit("sendMessage", {
-        groupId,
-        content: messageInput.trim(),
-        token,
-        type: 'text',
-        replyTo: replyToMsg?.id || null,
-      });
-      setMessageInput("");
-      setReplyToMsg(null);
-    } else {
-      console.warn("Socket not connected or message is empty.");
+    if (!isConnected) {
+      console.log('Not connected to server');
+      return;
     }
+
+    console.log('Sending message:', messageInput);
+    socket.emit("sendMessage", {
+      groupId,
+      content: messageInput,
+      token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
+      type: 'text',
+      replyTo: replyToMsg?.id || null,
+    });
+
+    setMessageInput('');
+    setReplyToMsg(null);
+    if (isTyping) handleTyping(false);
   };
 
-  // دالة إضافة إيموجي
+  // Handle typing indicator
+  const handleTyping = (typing: boolean) => {
+    if (!socket || !isConnected) return;
+    setIsTyping(typing);
+    socket.emit("typing", { groupId, typing });
+  };
+
+  // Handle emoji selection
   const handleEmojiSelect = (emoji: any) => {
     setMessageInput(prev => prev + emoji.native);
-    setShowEmoji(false);
   };
 
-  // دالة التفاعل مع الرسالة
-  const handleReact = (messageId: string, emoji: string) => {
-    if (!socket) return;
-    
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    socket.emit("addReaction", {
-      messageId,
+  // Handle message edit
+  const handleEditMessage = (messageId: string, currentContent: string) => {
+    setEditingMessage(messageId);
+    setEditContent(currentContent);
+    setMessageDropdowns({});
+  };
+
+  // Handle save edit
+  const handleSaveEdit = () => {
+    if (!socket || !editingMessage || !editContent.trim()) return;
+
+    socket.emit('editMessage', {
+      messageId: editingMessage,
       groupId,
-      emoji,
-      token,
+      newContent: editContent.trim(),
+      token: typeof window !== 'undefined' ? localStorage.getItem('token') : null
     });
-    setActiveReactionMsgId(null);
+
+    setEditingMessage(null);
+    setEditContent('');
   };
 
-  // دالة إزالة التفاعل
-  const handleUnreact = (messageId: string, emoji: string) => {
-    if (!socket) return;
-    
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    socket.emit("removeReaction", {
-      messageId,
-      groupId,
-      emoji,
-      token,
-    });
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setEditingMessage(null);
+    setEditContent('');
   };
 
-  // دالة رفع صورة أو فيديو
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file || !socket) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    const res = await fetch('/api/upload-media', { method: 'POST', body: formData });
-    const data = await res.json();
-    if (data.filepath) {
-      let type: string = 'file';
-      if (file.type.startsWith('image')) type = 'image';
-      else if (file.type.startsWith('video')) type = 'video';
-      let content = data.filepath;
-      if ((type === 'image' || type === 'video') && !content.startsWith('/')) {
-        content = '/' + content;
-      }
-      socket.emit("sendMessage", {
-        groupId,
-        content,
-        token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
-        type,
-        replyTo: replyToMsg?.id || null,
-      });
-      setReplyToMsg(null);
+  // Handle delete message
+  const handleDeleteMessage = (messageId: string) => {
+    if (!socket || !isConnected) {
+      alert('غير متصل بالسيرفر');
+      return;
     }
+
+    if (confirm('هل أنت متأكد من حذف هذه الرسالة؟')) {
+      socket.emit('deleteMessage', {
+        messageId,
+        groupId,
+        token: typeof window !== 'undefined' ? localStorage.getItem('token') : null
+      });
+    }
+    setMessageDropdowns({});
   };
 
-  const onJoinedGroup = (data: { groupId: string; messages: Message[] }) => {
-    setMessages(
-      data.messages
-        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-        .map(msg => ({
-          id: msg.id,
-          groupId: msg.groupId,
-          sender: msg.sender, 
-          content: DOMPurify.sanitize(msg.content), 
-          timestamp: msg.timestamp,
-          senderName: msg.senderName || 'مستخدم غير معروف',
-          senderAvatar: msg.senderAvatar || null,
-          reactions: msg.reactions || [],
-          replyTo: msg.replyTo,
-          replyToContent: msg.replyToContent,
-          replyToSenderName: msg.replyToSenderName,
-        }))
-    );
-    setTimeout(scrollToBottom, 100);
-  };
-
-  const onReceiveMessage = (message: Message) => {
-    setMessages(prev => [
+  // Toggle message dropdown
+  const toggleMessageDropdown = (messageId: string) => {
+    setMessageDropdowns(prev => ({
       ...prev,
-      {
-        id: message.id,
-        groupId: message.groupId,
-        sender: message.sender,
-        content: DOMPurify.sanitize(message.content), 
-        timestamp: message.timestamp,
-        senderName: message.senderName || 'مستخدم غير معروف',
-        senderAvatar: message.senderAvatar || null,
-        reactions: message.reactions || [],
-        replyTo: message.replyTo,
-        replyToContent: message.replyToContent,
-        replyToSenderName: message.replyToSenderName,
-      }
-    ]);
-    setTimeout(scrollToBottom, 100);
+      [messageId]: !prev[messageId]
+    }));
   };
 
-  // التحقق من تفاعل المستخدم مع رسالة
-  const hasUserReacted = (messageId: string, emoji: string) => {
-    const message = messages.find(m => m.id === messageId);
-    if (!message?.reactions) return false;
-    const reaction = message.reactions.find(r => r.emoji === emoji);
-    return reaction?.users.includes(userId) || false;
+  // Handle file upload with NSFW check
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !socket) return;
+
+    // Check file type
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    const isPdf = file.type.endsWith('/pdf');
+    
+    let type: string = 'file';
+    if (isImage) type = 'image';
+    else if (isVideo) type = 'video';
+    else if (isPdf) type = 'pdf';
+
+    try {
+      // NSFW check for images and videos
+      if (isImage) {
+        // Load NSFW.js model
+        const nsfwjs = await import('nsfwjs');
+        const model = await nsfwjs.load();
+        
+        // Create image element for checking
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        await new Promise((resolve) => {
+          img.onload = resolve;
+        });
+
+        // Check image
+        const predictions = await model.classify(img);
+        const unsafe = predictions.find(
+          (p) =>
+            (p.className === 'Porn' && p.probability > 0.5) ||
+            (p.className === 'Sexy' && p.probability > 0.5)
+        );
+
+        if (unsafe) {
+          alert('⚠️ الصورة تحتوي على محتوى غير لائق، تم رفضها.');
+          return;
+        }
+      } else if (isVideo) {
+        // Similar NSFW check for video
+        // ...
+      }
+
+      // If content is safe, proceed with upload
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload-media', { method: 'POST', body: formData });
+      const data = await res.json();
+      
+      if (data.filepath) {
+        let content = data.filepath;
+        if ((type === 'image' || type === 'video') && !content.startsWith('/')) {
+          content = '/' + content;
+        }
+        
+        socket.emit("sendMessage", {
+          groupId,
+          content,
+          token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
+          type,
+          replyTo: replyToMsg?.id || null,
+        });
+        
+        setReplyToMsg(null);
+      }
+    } catch (error) {
+      console.error('Error processing file:', error);
+      alert('حدث خطأ أثناء معالجة الملف');
+    }
   };
 
   return (
-    <div className="container my-4">
-      <div className="card shadow-sm mx-auto" style={{ maxWidth: 800 }}>
-        <div className="card-header text-center bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
-          <span>دردشة المجموعة: {groupId}</span>
-          <div className="d-flex align-items-center">
-            <span className="me-2">الأعضاء:</span>
-            <div className="d-flex">
-              {members.slice(0, 5).map((member) => (
-                <div key={member.id} className="position-relative me-1">
-                  <div 
-                    className="rounded-circle bg-secondary d-flex align-items-center justify-content-center"
-                    style={{ 
-                      width: '30px', 
-                      height: '30px', 
-                      fontSize: '12px',
-                      color: 'white'
+    <>
+      <style jsx>{`
+        @media (max-width: 768px) {
+          .nav-tabs .nav-link {
+            font-size: 0.875rem;
+            padding: 0.5rem 0.75rem;
+          }
+
+          .chat-messages {
+            padding: 0.75rem !important;
+          }
+
+          .message-bubble {
+            max-width: 85% !important;
+          }
+
+          .offcanvas {
+            width: 280px !important;
+          }
+        }
+
+        .hover-bg-light:hover {
+          background-color: #f8f9fa !important;
+        }
+
+        .nav-tabs .nav-link.active {
+          border-bottom: 2px solid #0d6efd !important;
+          background-color: transparent !important;
+        }
+
+        .dropdown-item:hover {
+          background-color: #f8f9fa !important;
+        }
+      `}</style>
+
+    <div className="container-fluid p-0">
+      <div className="row g-0">
+        {/* Mobile Header */}
+        <div className="col-12 bg-white border-bottom p-3 d-md-none">
+          <div className="d-flex align-items-center justify-content-between">
+            <div className="d-flex align-items-center">
+              <button
+                className="btn btn-light me-2 d-md-none"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#membersOffcanvas"
+                aria-controls="membersOffcanvas"
+              >
+                <FaSearch size={16} />
+              </button>
+              <h6 className="mb-0 fw-bold">{groupName || "المجموعة"}</h6>
+            </div>
+            <div className="dropdown" ref={dropdownRef}>
+              <button
+                className="btn btn-light rounded-circle"
+                onClick={() => setShowDropdown(!showDropdown)}
+              >
+                <FaEllipsisV size={16} />
+              </button>
+              {showDropdown && (
+                <div
+                  className="dropdown-menu dropdown-menu-end show position-absolute shadow-sm border"
+                  style={{
+                    top: '100%',
+                    right: 0,
+                    minWidth: '160px',
+                    zIndex: 1000,
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    padding: '8px 0'
+                  }}
+                >
+                  <button
+                    className="dropdown-item d-flex align-items-center px-3 py-2"
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      fontSize: '14px',
+                      color: '#333'
+                    }}
+                    onClick={() => {
+                      setShowDropdown(false);
+                      console.log('تعديل المجموعة');
                     }}
                   >
+                    تعديل المجموعة
+                  </button>
+                  <button
+                    className="dropdown-item d-flex align-items-center px-3 py-2 text-danger"
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      fontSize: '14px'
+                    }}
+                    onClick={() => {
+                      setShowDropdown(false);
+                      if (confirm('هل أنت متأكد من حذف المجموعة؟')) {
+                        console.log('حذف المجموعة');
+                      }
+                    }}
+                  >
+                    حذف المجموعة
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Sidebar - Members */}
+        <div className="col-md-3 border-end bg-white d-none d-md-block" style={{ height: '100vh', overflowY: 'auto' }}>
+          <div className="p-3 border-bottom">
+            <h5 className="fw-bold mb-3 text-center">الأعضاء</h5>
+            <div className="position-relative mb-3">
+              <input
+                type="text"
+                className="form-control bg-light border-0 rounded-pill"
+                placeholder="بحث..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <FaSearch className="position-absolute top-50 translate-middle-y end-0 me-3 text-muted" />
+            </div>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <small className="text-muted">متصل: {onlineUsers.size}</small>
+              <small className="text-muted">الكل: {members.length}</small>
+            </div>
+          </div>
+          <div className="p-3 border-bottom">
+            <h5 className="fw-bold mb-3 text-center">الأعضاء</h5>
+            <div className="position-relative mb-3">
+              <input 
+                type="text" 
+                className="form-control bg-light border-0 rounded-pill" 
+                placeholder="بحث..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <FaSearch className="position-absolute top-50 translate-middle-y end-0 me-3 text-muted" />
+            </div>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <small className="text-muted">متصل: {onlineUsers.size}</small>
+              <small className="text-muted">الكل: {members.length}</small>
+            </div>
+          </div>
+          
+          <div className="p-2">
+            {members
+              .filter(member => member.name.includes(searchQuery))
+              .map((member) => (
+                <div 
+                  key={member.id} 
+                  className="d-flex align-items-center p-2 rounded-3 mb-2 hover-bg-light"
+                >
+                  <div className="position-relative me-2">
                     {member.avatar ? (
                       <img 
                         src={member.avatar} 
-                        alt={member.name}
-                        className="rounded-circle"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        alt={member.name} 
+                        className="rounded-circle" 
+                        width="40" 
+                        height="40"
+                        style={{ objectFit: 'cover' }}
                       />
                     ) : (
-                      member.name.charAt(0)
+                      <div 
+                        className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" 
+                        style={{ 
+                          width: 40, 
+                          height: 40, 
+                          background: 'linear-gradient(135deg, #3b82f6, #1e40af)' 
+                        }}
+                      >
+                        {member.name.charAt(0).toUpperCase()}
+                      </div>
                     )}
+                    <span 
+                      className={`position-absolute bottom-0 start-0 rounded-circle border border-white ${onlineUsers.has(member.id) ? 'bg-success' : 'bg-secondary'}`} 
+                      style={{ width: 10, height: 10 }}
+                    ></span>
                   </div>
-                  <div 
-                    className="position-absolute top-0 end-0 rounded-circle border border-white"
-                    style={{
-                      width: '10px',
-                      height: '10px',
-                      backgroundColor: onlineUsers.has(member.id) ? '#28a745' : '#6c757d'
-                    }}
-                  />
+                  <div className="ms-2 flex-grow-1">
+                    <div className="fw-medium">{member.name}</div>
+                    <small className="text-muted">
+                      {onlineUsers.has(member.id) ? 'متصل الآن' : 'غير متصل'}
+                    </small>
+                  </div>
                 </div>
               ))}
-              {members.length > 5 && (
-                <div className="ms-1">
-                  <span className="badge bg-secondary">+{members.length - 5}</span>
-                </div>
-              )}
-            </div>
           </div>
         </div>
         
-        <div className="row g-0">
-          {/* قائمة الأعضاء */}
-          <div className="col-md-3 border-end" style={{ height: '400px', overflowY: 'auto' }}>
-            <div className="p-3">
-              <h6 className="mb-3">أعضاء المجموعة</h6>
-              {members.map((member) => (
-                <div key={member.id} className="d-flex align-items-center mb-2">
-                  <div className="position-relative me-2">
-                    <div 
-                      className="rounded-circle bg-secondary d-flex align-items-center justify-content-center"
-                      style={{ 
-                        width: '35px', 
-                        height: '35px', 
-                        fontSize: '14px',
-                        color: 'white'
-                      }}
-                    >
-                      {member.avatar ? (
-                        <img 
-                          src={member.avatar} 
-                          alt={member.name}
-                          className="rounded-circle"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      ) : (
-                        member.name.charAt(0)
-                      )}
-                    </div>
-                    <div 
-                      className="position-absolute top-0 end-0 rounded-circle border border-white"
-                      style={{
-                        width: '12px',
-                        height: '12px',
-                        backgroundColor: onlineUsers.has(member.id) ? '#28a745' : '#6c757d'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <div className="fw-bold small">{member.name}</div>
-                    <div className="text-muted small">
-                      {onlineUsers.has(member.id) ? '🟢 متصل' : '⚫ غير متصل'}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Mobile Offcanvas for Members */}
+        <div className="offcanvas offcanvas-start d-md-none" tabIndex={-1} id="membersOffcanvas" aria-labelledby="membersOffcanvasLabel">
+          <div className="offcanvas-header">
+            <h5 className="offcanvas-title fw-bold" id="membersOffcanvasLabel">الأعضاء</h5>
+            <button type="button" className="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
           </div>
-
-          {/* منطقة الدردشة */}
-          <div className="col-md-9">
-            <div
-              className="card-body"
-              style={{
-                height: 320,
-                overflowY: "auto",
-                background: "#f8f9fa",
-                borderBottom: "1px solid #eee",
-              }}
-            >
-              {messages.length === 0 ? (
-                <p className="text-center text-muted">لا توجد رسائل بعد. ابدأ الدردشة!</p>
-              ) : (
-                <AnimatePresence>
-                  {messages.map((msg, index) => (
-                    <motion.div
-                      key={msg.id || index}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ duration: 0.3 }}
-                      className={`mb-3 ${msg.senderId === userId || msg.sender === userId ? "text-end" : "text-start"}`}
-                    >
-                      <div
-                        className={`d-inline-block p-3 rounded-3 position-relative ${
-                          msg.senderId === userId || msg.sender === userId
-                            ? "bg-primary text-white"
-                            : "bg-white border"
-                        }`}
-                        style={{ 
-                          maxWidth: "70%", 
-                          borderRadius: "18px",
-                          boxShadow: "0 1px 2px rgba(0,0,0,0.1)"
-                        }}
-                      >
-                        {/* عرض الرد */}
-                        {msg.replyTo && (
-                          <div className={`mb-2 p-2 rounded ${msg.senderId === userId || msg.sender === userId ? 'bg-primary bg-opacity-25' : 'bg-light'}`}>
-                            <div className="small fw-bold">
-                              رد على {msg.replyToSenderName || 'مستخدم'}
-                            </div>
-                            <div className="small">
-                              {msg.replyToContent || 'رسالة محذوفة'}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="fw-bold small mb-1">
-                          {msg.senderName || 'مستخدم غير معروف'}
-                        </div>
-                        
-                        <div className="mb-2">
-                          {(() => {
-                            console.log(msg); // طباعة الرسالة للتشخيص
-                            // منطق ذكي لعرض الصور حتى لو type غير مضبوط
-                            const isImage = msg.type === 'image' || (typeof msg.content === 'string' && /\.(jpg|jpeg|png|gif)$/i.test(msg.content));
-                            if (isImage) {
-                              return <img src={msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content} alt="صورة" style={{ maxWidth: 200, borderRadius: 8 }} />;
-                            } else if (msg.type === 'video') {
-                              return <video src={msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content} controls style={{ maxWidth: 250, borderRadius: 8 }} />;
-                            } else if (msg.type === 'file') {
-                              return <a href={msg.content && !msg.content.startsWith('/') ? '/' + msg.content : msg.content} target="_blank" rel="noopener noreferrer">ملف مرفق</a>;
-                            } else {
-                              return <span>{msg.messageContent || msg.content}</span>;
-                            }
-                          })()}
-                        </div>
-
-                        {/* عرض التفاعلات */}
-                        {msg.reactions && msg.reactions.length > 0 && (
-                          <div className="d-flex flex-wrap gap-1 mb-2">
-                            {msg.reactions.map((reaction, idx) => (
-                              <button
-                                key={idx}
-                                className={`btn btn-sm ${hasUserReacted(msg.id, reaction.emoji) ? 'btn-primary' : 'btn-outline-secondary'}`}
-                                onClick={() => hasUserReacted(msg.id, reaction.emoji) 
-                                  ? handleUnreact(msg.id, reaction.emoji)
-                                  : handleReact(msg.id, reaction.emoji)
-                                }
-                                style={{ fontSize: '12px' }}
-                              >
-                                {reaction.emoji} {reaction.users.length}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="d-flex justify-content-between align-items-center">
-                          <div className="text-secondary small">
-                            {new Date(msg.timestamp).toLocaleTimeString()}
-                          </div>
-                          
-                          {/* أزرار التفاعل */}
-                          <div className="d-flex gap-1">
-                            <button
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={() => setReplyToMsg(msg)}
-                              title="رد"
-                            >
-                              💬
-                            </button>
-                            <div className="position-relative">
-                              <button
-                                className="btn btn-sm btn-outline-secondary"
-                                onClick={() => setActiveReactionMsgId(activeReactionMsgId === msg.id ? null : msg.id)}
-                                title="تفاعل"
-                              >
-                                😊
-                              </button>
-                              {activeReactionMsgId === msg.id && (
-                                <div className="position-absolute bottom-100 start-0 mb-1 p-2 bg-white border rounded shadow">
-                                  <div className="d-flex gap-1">
-                                    {['👍', '❤️', '😂', '😮', '😢', '😡'].map(emoji => (
-                                      <button
-                                        key={emoji}
-                                        className="btn btn-sm"
-                                        onClick={() => handleReact(msg.id, emoji)}
-                                      >
-                                        {emoji}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* منطقة الإدخال */}
-            <div className="card-footer bg-white">
-              {/* عرض الرد المحدد */}
-              {replyToMsg && (
-                <div className="mb-2 p-2 bg-light rounded">
-                  <div className="d-flex justify-content-between align-items-center">
-                    <div>
-                      <small className="text-muted">رد على {replyToMsg.senderName}</small>
-                      <div className="small">{replyToMsg.content}</div>
-                    </div>
-                    <button
-                      className="btn btn-sm btn-outline-secondary"
-                      onClick={() => setReplyToMsg(null)}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="input-group">
+          <div className="offcanvas-body p-0">
+            <div className="p-3 border-bottom">
+              <div className="position-relative mb-3">
                 <input
                   type="text"
-                  value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSendMessage();
-                  }}
-                  className="form-control"
-                  placeholder="اكتب رسالتك هنا..."
-                  disabled={!socket}
+                  className="form-control bg-light border-0 rounded-pill"
+                  placeholder="بحث..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                 />
-                
-                {/* زر الإيموجي */}
-                <div className="position-relative" ref={emojiPickerRef}>
-                  <button
-                    className="btn btn-light"
-                    onClick={() => setShowEmoji(!showEmoji)}
-                    type="button"
-                  >
-                    😊
-                  </button>
-                  {showEmoji && (
-                    <div className="position-absolute bottom-100 end-0 mb-1">
-                      <Picker
-                        data={data}
-                        onEmojiSelect={handleEmojiSelect}
-                        theme="light"
-                        set="native"
-                        previewPosition="none"
-                        skinTonePosition="none"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* زر رفع صورة/فيديو */}
-                <label className="btn btn-light" title="إرفاق صورة/فيديو">
-                  <input type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={handleFileChange} />
-                  📎
-                </label>
-                
-                <button
-                  onClick={handleSendMessage}
-                  className="btn btn-primary"
-                  type="button"
-                  disabled={!socket || !messageInput.trim()}
-                >
-                  <i className="bi bi-send"></i> إرسال
-                </button>
+                <FaSearch className="position-absolute top-50 translate-middle-y end-0 me-3 text-muted" />
               </div>
-              
-              {!socket && (
-                <div className="text-danger text-center mt-2 small">
-                  جاري الاتصال بسيرفر الدردشة...
-                </div>
-              )}
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <small className="text-muted">متصل: {onlineUsers.size}</small>
+                <small className="text-muted">الكل: {members.length}</small>
+              </div>
+            </div>
+
+            <div className="p-2">
+              {members
+                .filter(member => member.name.includes(searchQuery))
+                .map((member) => (
+                  <div
+                    key={member.id}
+                    className="d-flex align-items-center p-2 rounded-3 mb-2"
+                  >
+                    <div className="position-relative me-2">
+                      {member.avatar ? (
+                        <img
+                          src={member.avatar}
+                          alt={member.name}
+                          className="rounded-circle"
+                          width="40"
+                          height="40"
+                          style={{ objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div
+                          className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                          style={{
+                            width: 40,
+                            height: 40,
+                            background: 'linear-gradient(135deg, #3b82f6, #1e40af)'
+                          }}
+                        >
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <span
+                        className={`position-absolute bottom-0 start-0 rounded-circle border border-white ${onlineUsers.has(member.id) ? 'bg-success' : 'bg-secondary'}`}
+                        style={{ width: 10, height: 10 }}
+                      ></span>
+                    </div>
+                    <div className="ms-2 flex-grow-1">
+                      <div className="fw-medium">{member.name}</div>
+                      <small className="text-muted">
+                        {onlineUsers.has(member.id) ? 'متصل الآن' : 'غير متصل'}
+                      </small>
+                    </div>
+                  </div>
+                ))}
             </div>
           </div>
         </div>
+
+        {/* Main Chat Area */}
+        <div className="col-12 col-md-9 d-flex flex-column" style={{ height: 'calc(100vh - 70px)' }}>
+          {/* Desktop Chat Header */}
+          <div className="p-3 border-bottom bg-white d-none d-md-block">
+            <div className="d-flex justify-content-between align-items-center">
+              <div className="d-flex align-items-center">
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold me-2"
+                  style={{
+                    width: 45,
+                    height: 45,
+                    background: 'linear-gradient(135deg, #3b82f6, #1e40af)'
+                  }}
+                >
+                  {groupId.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h5 className="fw-bold mb-0">{groupName}</h5>
+                  <div className="d-flex align-items-center">
+                    <small className="text-muted">
+                      <span className="me-1 d-inline-block rounded-circle bg-success" style={{ width: 8, height: 8 }}></span>
+                      {onlineUsers.size} متصل • {members.length} عضو
+                    </small>
+                  </div>
+                </div>
+              </div>
+
+              <div className="d-flex">
+                <button className="btn btn-light rounded-circle me-2">
+                  <FaSearch size={16} />
+                </button>
+                <div className="dropdown" ref={dropdownRef}>
+                  <button
+                    className="btn btn-light rounded-circle"
+                    onClick={() => setShowDropdown(!showDropdown)}
+                  >
+                    <FaEllipsisV size={16} />
+                  </button>
+                  {showDropdown && (
+                    <div
+                      className="dropdown-menu dropdown-menu-end show position-absolute shadow-sm border"
+                      style={{
+                        top: '100%',
+                        right: 0,
+                        minWidth: '160px',
+                        zIndex: 1000,
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        padding: '8px 0'
+                      }}
+                    >
+                      <button
+                        className="dropdown-item d-flex align-items-center px-3 py-2"
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          fontSize: '14px',
+                          color: '#333'
+                        }}
+                        onClick={() => {
+                          setShowDropdown(false);
+                          // إضافة منطق تعديل المجموعة هنا
+                          console.log('تعديل المجموعة');
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                      >
+                        <FaEdit className="me-2" size={14} />
+                        تعديل المجموعة
+                      </button>
+                      <button
+                        className="dropdown-item d-flex align-items-center px-3 py-2 text-danger"
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          fontSize: '14px'
+                        }}
+                        onClick={() => {
+                          setShowDropdown(false);
+                          // إضافة منطق حذف المجموعة هنا
+                          if (confirm('هل أنت متأكد من حذف المجموعة؟')) {
+                            console.log('حذف المجموعة');
+                          }
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                      >
+                        <FaTrash className="me-2" size={14} />
+                        حذف المجموعة
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Tabs - Responsive */}
+          <div className="bg-white border-bottom">
+            <ul className="nav nav-tabs border-0 justify-content-center flex-nowrap overflow-auto">
+              <li className="nav-item">
+                <button
+                  className={`nav-link border-0 px-2 px-md-3 ${activeTab === 'chat' ? 'active fw-bold' : 'text-muted'}`}
+                  onClick={() => setActiveTab('chat')}
+                >
+                  <span className="d-none d-sm-inline">الدردشة</span>
+                  <span className="d-sm-none">💬</span>
+                </button>
+              </li>
+              <li className="nav-item">
+                <button
+                  className={`nav-link border-0 px-2 px-md-3 ${activeTab === 'images' ? 'active fw-bold' : 'text-muted'}`}
+                  onClick={() => setActiveTab('images')}
+                >
+                  <span className="d-none d-sm-inline">الصور</span>
+                  <span className="d-sm-none">🖼️</span>
+                </button>
+              </li>
+              <li className="nav-item">
+                <button
+                  className={`nav-link border-0 px-2 px-md-3 ${activeTab === 'videos' ? 'active fw-bold' : 'text-muted'}`}
+                  onClick={() => setActiveTab('videos')}
+                >
+                  <span className="d-none d-sm-inline">الفيديوهات</span>
+                  <span className="d-sm-none">🎥</span>
+                </button>
+              </li>
+              <li className="nav-item">
+                <button
+                  className={`nav-link border-0 px-2 px-md-3 ${activeTab === 'files' ? 'active fw-bold' : 'text-muted'}`}
+                  onClick={() => setActiveTab('files')}
+                >
+                  <span className="d-none d-sm-inline">الملفات</span>
+                  <span className="d-sm-none">📁</span>
+                </button>
+              </li>
+            </ul>
+          </div>
+          
+          {/* Messages */}
+          <div 
+            className="flex-grow-1 p-3 overflow-auto" 
+            style={{ 
+              background: 'linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%)',
+              scrollBehavior: 'smooth' 
+            }}
+          >
+            {filteredMessages && filteredMessages.length > 0 ? (
+              <div className="d-flex flex-column gap-3">
+                {filteredMessages.map((msg, index) => (
+                  <div key={`${msg.id}-${index}`} className={`d-flex ${msg.senderId === userId ? 'justify-content-end' : 'justify-content-start'}`}>
+                    <div className={`d-flex ${msg.senderId === userId ? 'flex-row-reverse' : 'flex-row'}`} style={{ maxWidth: '75%' }}>
+                      {/* Avatar (only for received messages) */}
+                      {msg.senderId !== userId && (
+                        <div className="me-2">
+                          {msg.senderAvatar ? (
+                            <img 
+                              src={msg.senderAvatar} 
+                              alt={msg.senderName} 
+                              className="rounded-circle border border-2 border-white" 
+                              width="40" 
+                              height="40"
+                              style={{ objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <div 
+                              className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" 
+                              style={{ 
+                                width: 40, 
+                                height: 40, 
+                                background: 'linear-gradient(135deg, #3b82f6, #1e40af)' 
+                              }}
+                            >
+                              {msg.senderName.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Message Content */}
+                      <div className="d-flex flex-column">
+                        {/* Reply Preview */}
+                        {msg.replyTo && (
+                          <div 
+                            className={`small p-2 rounded bg-light mb-1 border-start border-3 border-primary ${msg.senderId === userId ? 'ms-2' : 'me-2'}`}
+                            style={{ borderRadius: '0.5rem' }}
+                          >
+                            <div className="fw-bold text-primary">
+                              {messages.find(m => m.id === msg.replyTo)?.senderName || 'رسالة محذوفة'}
+                            </div>
+                            <div className="text-truncate">
+                              {messages.find(m => m.id === msg.replyTo)?.content || 'محتوى الرسالة غير متاح'}
+                            </div>
+                          </div>
+                        )}
+                        
+                        <div
+                          className={`position-relative p-3 shadow-sm ${
+                            msg.senderId === userId
+                              ? 'bg-primary text-white rounded-4 rounded-bottom-end-0'
+                              : 'bg-white text-dark rounded-4 rounded-bottom-start-0'
+                          } ${msg.isDeleted ? 'opacity-75' : ''}`}
+                        >
+                          {/* Message Options Dropdown */}
+                          {!msg.isDeleted && (msg.senderId === userId || isAdmin) && (
+                            <div className="position-absolute top-0 end-0 mt-2 me-2">
+                              <div className="dropdown">
+                                <button
+                                  className="btn btn-sm btn-outline-secondary rounded-circle"
+                                  style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    padding: '0',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    zIndex: 10,
+                                    backgroundColor: 'rgba(255,255,255,0.9)',
+                                    border: '1px solid #dee2e6'
+                                  }}
+                                  onClick={() => toggleMessageDropdown(msg.id)}
+                                  title="خيارات الرسالة"
+                                >
+                                  <FaEllipsisV size={12} />
+                                </button>
+                                {messageDropdowns[msg.id] && (
+                                  <div
+                                    className="dropdown-menu dropdown-menu-end show position-absolute shadow-sm border"
+                                    style={{
+                                      top: '100%',
+                                      right: 0,
+                                      minWidth: '140px',
+                                      zIndex: 1000,
+                                      backgroundColor: 'white',
+                                      borderRadius: '8px',
+                                      padding: '4px 0'
+                                    }}
+                                  >
+                                    {/* Edit option - only for message owner and text messages */}
+                                    {msg.senderId === userId && msg.type === 'text' && (
+                                      <button
+                                        className="dropdown-item d-flex align-items-center px-3 py-2"
+                                        style={{
+                                          border: 'none',
+                                          background: 'transparent',
+                                          fontSize: '13px',
+                                          color: '#333'
+                                        }}
+                                        onClick={() => handleEditMessage(msg.id, msg.content)}
+                                      >
+                                        <FaEdit className="me-2" size={12} />
+                                        تعديل
+                                      </button>
+                                    )}
+
+                                    {/* Delete option - for message owner or admin */}
+                                    <button
+                                      className="dropdown-item d-flex align-items-center px-3 py-2 text-danger"
+                                      style={{
+                                        border: 'none',
+                                        background: 'transparent',
+                                        fontSize: '13px'
+                                      }}
+                                      onClick={() => handleDeleteMessage(msg.id)}
+                                    >
+                                      <FaTrash className="me-2" size={12} />
+                                      حذف
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Sender Name (only for received messages) */}
+                          {msg.senderId !== userId && (
+                            <div className="small fw-bold mb-1 text-primary">{msg.senderName}</div>
+                          )}
+
+                          {/* Content based on type or edit mode */}
+                          {editingMessage === msg.id ? (
+                            <div className="d-flex flex-column gap-2">
+                              <textarea
+                                className="form-control"
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                rows={2}
+                                style={{ resize: 'none' }}
+                              />
+                              <div className="d-flex gap-2">
+                                <button
+                                  className="btn btn-sm btn-success"
+                                  onClick={handleSaveEdit}
+                                  disabled={!editContent.trim()}
+                                >
+                                  حفظ
+                                </button>
+                                <button
+                                  className="btn btn-sm btn-secondary"
+                                  onClick={handleCancelEdit}
+                                >
+                                  إلغاء
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              {msg.type === 'text' && (
+                                <div>
+                                  <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }} />
+                                  {msg.isEdited && (
+                                    <small className={`ms-2 ${msg.senderId === userId ? 'text-light' : 'text-muted'}`}>
+                                      (تم التعديل)
+                                    </small>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {msg.type === 'image' && (
+                            <img 
+                              src={msg.content} 
+                              alt="صورة" 
+                              className="img-fluid rounded-3 cursor-pointer" 
+                              style={{ maxHeight: 240 }}
+                              onClick={() => setPreviewImage(msg.content)}
+                            />
+                          )}
+                          {msg.type === 'video' && (
+                            <video 
+                              src={msg.content} 
+                              controls 
+                              className="img-fluid rounded-3 w-100"
+                              style={{ maxHeight: 240 }}
+                            />
+                          )}
+                          {msg.type === 'file' && (
+                            <div className="d-flex align-items-center bg-light p-2 rounded-3">
+                              <FaFileAlt className="text-primary me-2" size={24} />
+                              <div>
+                                <div className="fw-medium">ملف مرفق</div>
+                                <a href={msg.content} target="_blank" rel="noopener noreferrer" className="small text-primary">
+                                  تحميل الملف
+                                </a>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Time and Status */}
+                          <div className={`d-flex justify-content-end align-items-center small mt-1 ${msg.senderId === userId ? 'text-light' : 'text-muted'}`}>
+                            {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : 'الآن'}
+                            {msg.senderId === userId && (
+                              <span className="ms-1">✓</span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {/* Reactions */}
+                        {msg.reactions && msg.reactions.length > 0 && (
+                          <div className={`d-flex mt-1 gap-1 ${msg.senderId === userId ? 'justify-content-start' : 'justify-content-end'}`}>
+                            {msg.reactions.map((reaction, idx) => (
+                              <span 
+                                key={idx} 
+                                className="bg-white small py-1 px-2 rounded-pill shadow-sm cursor-pointer"
+                              >
+                                {reaction.emoji} {reaction.users.length > 1 && reaction.users.length}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+            ) : (
+              <div className="d-flex h-100 align-items-center justify-content-center">
+                <div className="text-center p-4 bg-white rounded-4 shadow-sm">
+                  <h5 className="fw-bold mb-2">لا توجد رسائل بعد</h5>
+                  <p className="text-muted mb-3">ابدأ المحادثة مع أعضاء المجموعة!</p>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Input Area */}
+          <div className="p-3 border-top bg-white">
+            {/* Reply Preview */}
+            {replyToMsg && (
+              <div className="d-flex justify-content-between align-items-center bg-light p-2 rounded-3 mb-2">
+                <div className="d-flex align-items-center">
+                  <div className="border-start border-3 border-primary h-100 me-2"></div>
+                  <div>
+                    <div className="small fw-bold text-primary">{replyToMsg.senderName}</div>
+                    <div className="small text-truncate">{replyToMsg.content}</div>
+                  </div>
+                </div>
+                <button 
+                  className="btn btn-sm text-muted" 
+                  onClick={() => setReplyToMsg(null)}
+                >
+                  <FaTimes />
+                </button>
+              </div>
+            )}
+            
+            <form onSubmit={handleSendMessage} className="d-flex align-items-end gap-2">
+              <div className="flex-grow-1 bg-light rounded-4 px-3 py-2">
+                {/* Attachment Buttons - Responsive */}
+                <div className="d-flex gap-1 gap-md-2 mb-2 flex-wrap">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
+                    onClick={() => document.getElementById('image-upload').click()}
+                    title="إضافة صورة"
+                  >
+                    <FaImage size={14} />
+                  </button>
+                  <input
+                    id="image-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    style={{ display: 'none' }}
+                  />
+
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
+                    onClick={() => document.getElementById('video-upload').click()}
+                    title="إضافة فيديو"
+                  >
+                    <FaVideo size={14} />
+                  </button>
+                  <input
+                    id="video-upload"
+                    type="file"
+                    accept="video/*"
+                    onChange={handleFileUpload}
+                    style={{ display: 'none' }}
+                  />
+
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
+                    onClick={() => document.getElementById('file-upload').click()}
+                    title="إضافة ملف"
+                  >
+                    <FaFileAlt size={14} />
+                  </button>
+                  <input
+                    id="file-upload"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                    onChange={handleFileUpload}
+                    style={{ display: 'none' }}
+                  />
+
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2 d-none d-md-inline-block"
+                    title="تسجيل صوتي"
+                  >
+                    <FaMicrophone size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
+                    onClick={() => setShowEmoji(!showEmoji)}
+                    title="إضافة إيموجي"
+                  >
+                    <FaRegSmile size={14} />
+                  </button>
+                </div>
+                
+                {/* Text Input */}
+                <textarea
+                  className="form-control border-0 bg-transparent p-0"
+                  placeholder="اكتب رسالتك..."
+                  value={messageInput}
+                  onChange={e => {
+                    setMessageInput(e.target.value);
+                    if (!isTyping) handleTyping(true);
+                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                    typingTimeoutRef.current = setTimeout(() => handleTyping(false), 2000);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                  rows={1}
+                  style={{ resize: 'none', minHeight: '40px' }}
+                />
+              </div>
+              
+              {/* Send Button - Responsive */}
+              <button
+                type="submit"
+                className="btn btn-primary rounded-circle p-2 p-md-3"
+                disabled={!isConnected || !messageInput.trim()}
+                title="إرسال الرسالة"
+              >
+                <FaPaperPlane size={16} />
+              </button>
+            </form>
+            
+            {/* Emoji Picker */}
+            {showEmoji && (
+              <div className="position-absolute bottom-100 end-0 mb-2 shadow-lg rounded-3 overflow-hidden" ref={emojiPickerRef}>
+                <Picker
+                  data={data}
+                  onEmojiSelect={handleEmojiSelect}
+                  theme="light"
+                  previewPosition="none"
+                  skinTonePosition="none"
+                />
+              </div>
+            )}
+            
+            {/* Typing Indicator */}
+            {typingUsers.size > 0 && (
+              <div className="small text-muted mt-1 px-2">
+                {Array.from(typingUsers).map(id => 
+                  members.find(m => m.id === id)?.name || 'شخص ما'
+                ).join(', ')} {typingUsers.size === 1 ? 'يكتب الآن...' : 'يكتبون الآن...'}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+      
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-75"
+          style={{ zIndex: 1050 }}
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="position-relative" style={{ maxWidth: '90%', maxHeight: '90vh' }}>
+            <img 
+              src={previewImage} 
+              alt="معاينة الصورة" 
+              className="img-fluid rounded-3"
+              style={{ maxHeight: '90vh' }}
+            />
+            <button 
+              className="position-absolute top-0 end-0 btn btn-sm btn-light rounded-circle m-2"
+              onClick={() => setPreviewImage(null)}
+            >
+              <FaTimes />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
+    </>
   );
 };
 
 export default GroupChat;
+
+
+
+
+
+

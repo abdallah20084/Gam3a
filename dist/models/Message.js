@@ -35,44 +35,55 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 // models/Message.ts
 const mongoose_1 = __importStar(require("mongoose"));
-// تعريف Schema للرسالة
 const MessageSchema = new mongoose_1.Schema({
-    group: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: 'Group', // يشير إلى نموذج Group
-        required: true,
-    },
-    sender: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: 'User', // يشير إلى نموذج User
-        required: true,
-    },
     content: {
         type: String,
-        required: true,
-        trim: true, // إزالة المسافات البيضاء الزائدة
+        required: function () {
+            // محتوى مطلوب إلا إذا كان هناك مرفقات
+            return !(this.attachments && this.attachments.length > 0);
+        },
+        trim: true
     },
     type: {
         type: String,
         enum: ['text', 'image', 'video', 'file', 'pdf', 'system'],
-        default: 'text',
+        default: 'text'
+    },
+    sender: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    group: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Group',
+        required: true
     },
     timestamp: {
         type: Date,
-        default: Date.now,
+        default: Date.now
+    },
+    replyTo: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Message'
     },
     reactions: [
         {
-            emoji: { type: String, required: true },
-            users: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
+            emoji: String,
+            users: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }]
         }
     ],
-    replyTo: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: 'Message',
-        default: null,
-    },
-});
-// تصدير النموذج
+    attachments: [
+        {
+            url: { type: String, required: true },
+            type: { type: String, required: true },
+            name: String,
+            size: Number
+        }
+    ]
+}, { timestamps: true });
+// إنشاء فهرس للبحث السريع
+MessageSchema.index({ group: 1, createdAt: -1 });
+// تصدير النموذج مع تحديد النوع بشكل صحيح
 const Message = mongoose_1.default.models.Message || mongoose_1.default.model('Message', MessageSchema);
 exports.default = Message;

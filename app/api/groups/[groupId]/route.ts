@@ -29,18 +29,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const { groupId } = await params;
 
-    if (!mongoose.Types.ObjectId.isValid(groupId)) {
-      return NextResponse.json({ success: false, error: 'معرف مجموعة غير صالح.' }, { status: 400 });
-    }
-
+    // تعريف المتغيرات
     let userId: mongoose.Types.ObjectId | null = null;
-    let isMember: boolean = false;
-    let isAdmin: boolean = false;
-    let currentUserRole: string = 'guest';
+    let isMember = false;
+    let currentUserRole = 'guest';
+    let isAdmin = false;
 
+    // تسجيل معلومات التوكن للتشخيص
     const authHeader = request.headers.get('Authorization');
+    console.log("Auth header exists:", !!authHeader);
+    
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
+      console.log("Token format check:", token ? token.substring(0, 10) + "..." : "missing");
+      
       try {
         const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string; isSuperAdmin?: boolean };
         userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
@@ -240,6 +242,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return NextResponse.json({ success: false, error: error.message || 'خطأ داخلي في الخادم.' }, { status: 500 });
   }
 }
+
 
 
 

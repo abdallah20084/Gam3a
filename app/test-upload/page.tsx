@@ -1,9 +1,10 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import React, { useState } from 'react';
-import ImageUploadWithCheck from '@/components/ImageUploadWithCheck';
-import VideoUploadWithCheck from '@/components/VideoUploadWithCheck';
-import { ContentFilterResult } from '@/lib/contentFilter';
+
+const ImageUploadWithCheck = dynamic(() => import('@/components/ImageUploadWithCheck'), { ssr: false });
+const VideoUploadWithCheck = dynamic(() => import('@/components/VideoUploadWithCheck'), { ssr: false });
 
 export default function TestUploadPage() {
   const [uploadHistory, setUploadHistory] = useState<Array<{
@@ -15,25 +16,25 @@ export default function TestUploadPage() {
     timestamp: Date;
   }>>([]);
 
-  const handleImageUploadSuccess = (file: File, result: ContentFilterResult) => {
+  const handleImageUploadSuccess = (file: File) => {
     const newUpload = {
       id: Date.now().toString(),
       type: 'image' as const,
       name: file.name,
-      isSafe: result.isSafe,
-      confidence: result.confidence,
+      isSafe: true,
+      confidence: 1,
       timestamp: new Date()
     };
     setUploadHistory(prev => [newUpload, ...prev]);
   };
 
-  const handleVideoUploadSuccess = (file: File, result: ContentFilterResult, thumbnail?: string) => {
+  const handleVideoUploadSuccess = (file: File) => {
     const newUpload = {
       id: Date.now().toString(),
       type: 'video' as const,
       name: file.name,
-      isSafe: result.isSafe,
-      confidence: result.confidence,
+      isSafe: true,
+      confidence: 1,
       timestamp: new Date()
     };
     setUploadHistory(prev => [newUpload, ...prev]);
