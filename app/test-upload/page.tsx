@@ -192,7 +192,7 @@ export default function TestUploadPage() {
                   <div className="row">
                     <div className="col-md-6">
                       <div className="alert alert-success">
-                        <strong>النموذج المتقدم:</strong> NSFW.js مع TensorFlow.js
+                        <strong>النموذج المتقدم:</strong> أقوى وأحدث التقنيات
                       </div>
                     </div>
                     <div className="col-md-6">

@@ -161,7 +161,7 @@ export default function ImageUploadWithCheck({
           <div className="alert alert-info mb-3">
             <small>
               <i className="bi bi-info-circle me-1"></i>
-              <strong>معلومات:</strong> يتم فحص الصور في المتصفح باستخدام NSFW.js قبل الرفع
+              <strong>معلومات:</strong> يتم فحص الصور في المتصفح باستخدام أقوي وأحدث التقنيات قبل الرفع
             </small>
           </div>
 

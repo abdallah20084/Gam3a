@@ -222,7 +222,7 @@ export default function VideoUploadWithCheck({
           <div className="alert alert-info mb-3">
             <small>
               <i className="bi bi-info-circle me-1"></i>
-              <strong>معلومات:</strong> يتم فحص الفيديو في المتصفح باستخدام NSFW.js قبل الرفع
+              <strong>معلومات:</strong> يتم فحص الفيديو في المتصفح باستخدام أقوي وأحدث التقنيات قبل الرفع
             </small>
           </div>
 
