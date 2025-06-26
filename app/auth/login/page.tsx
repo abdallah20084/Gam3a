@@ -45,6 +45,10 @@ export default function LoginPage() {
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('userName', response.data.userName);
         localStorage.setItem('userId', response.data.userId);
+
+        // إرسال حدث لتحديث الـ Navbar
+        window.dispatchEvent(new Event('authStateChanged'));
+
         router.push('/');
       } else if (response.data.redirectToVerify && response.data.phone) {
         setError(response.data.message || 'حسابك غير مفعل. الرجاء توجيهك لصفحة التحقق.');

@@ -19,17 +19,56 @@ export default function Navbar() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    setIsLoggedIn(!!token);
-    setUserName(localStorage.getItem('userName'));
+    const checkAuthStatus = () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      setIsLoggedIn(!!token);
+      setUserName(localStorage.getItem('userName'));
+    };
+
+    // فحص الحالة عند التحميل
+    checkAuthStatus();
+
+    // الاستماع لتغييرات localStorage
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'token' || e.key === 'userName') {
+        checkAuthStatus();
+      }
+    };
+
+    // الاستماع لتغييرات localStorage من نفس التبويب
+    const handleCustomStorageChange = () => {
+      checkAuthStatus();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('authStateChanged', handleCustomStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('authStateChanged', handleCustomStorageChange);
+    };
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    localStorage.removeItem('userName'); 
+    localStorage.removeItem('userName');
     localStorage.removeItem('userId');
     setIsLoggedIn(false);
+
+    // إرسال حدث لتحديث الـ Navbar
+    window.dispatchEvent(new Event('authStateChanged'));
+
     router.push('/auth/login');
+  };
+
+  // إغلاق الـ mobile menu عند الضغط على أي link
+  const closeMobileMenu = () => {
+    const navbarCollapse = document.getElementById('mainNavbar');
+    const navbarToggler = document.querySelector('.navbar-toggler') as HTMLElement;
+
+    if (navbarCollapse?.classList.contains('show')) {
+      navbarToggler?.click();
+    }
   };
 
   // إغلاق القائمة عند الضغط خارجها
@@ -108,10 +147,10 @@ export default function Navbar() {
               </li>
             )}
             <li className="nav-item">
-              <Link href="/" className="nav-link shadow-hover fw-bold fs-4 text-dark">الرئيسية</Link>
+              <Link href="/" className="nav-link shadow-hover fw-bold fs-4 text-dark" onClick={closeMobileMenu}>الرئيسية</Link>
             </li>
             <li className="nav-item">
-              <Link href="/groups" className="nav-link shadow-hover fw-bold fs-4 text-dark">الجروبات</Link>
+              <Link href="/groups" className="nav-link shadow-hover fw-bold fs-4 text-dark" onClick={closeMobileMenu}>الجروبات</Link>
             </li>
             <li className="nav-item">
               <span className="fw-bold fs-4 text-muted px-2" style={{ cursor: 'not-allowed' }}>شقق وعقارات قريبًا</span>
@@ -121,21 +160,21 @@ export default function Navbar() {
             </li>
             
             <li className="nav-item">
-              <Link href="/features" className="nav-link shadow-hover fw-bold fs-4 text-dark">مميزات التطبيق</Link>
+              <Link href="/features" className="nav-link shadow-hover fw-bold fs-4 text-dark" onClick={closeMobileMenu}>مميزات التطبيق</Link>
             </li>
             <li className="nav-item">
-              <Link href="/test-upload" className="nav-link shadow-hover fw-bold fs-4 text-dark">اختبار الرفع</Link>
+              <Link href="/test-upload" className="nav-link shadow-hover fw-bold fs-4 text-dark" onClick={closeMobileMenu}>اختبار الرفع</Link>
             </li>
             {isLoggedIn && (
               <>
                 <li className="nav-item d-lg-none">
-                  <Link href="/profile" className="nav-link shadow-hover fw-semibold fs-5 text-dark">الملف الشخصي</Link>
+                  <Link href="/profile" className="nav-link shadow-hover fw-semibold fs-5 text-dark" onClick={closeMobileMenu}>الملف الشخصي</Link>
                 </li>
                 <li className="nav-item d-lg-none">
-                  <Link href="/settings" className="nav-link shadow-hover fw-semibold fs-5 text-dark">الإعدادات</Link>
+                  <Link href="/settings" className="nav-link shadow-hover fw-semibold fs-5 text-dark" onClick={closeMobileMenu}>الإعدادات</Link>
                 </li>
                 <li className="nav-item d-lg-none mt-3">
-                  <button className="btn btn-danger w-100 fw-semibold fs-5 btn-glow" onClick={handleLogout}>
+                  <button className="btn btn-danger w-100 fw-semibold fs-5 btn-glow" onClick={() => { handleLogout(); closeMobileMenu(); }}>
                     تسجيل الخروج
                   </button>
                 </li>
@@ -144,10 +183,10 @@ export default function Navbar() {
             {!isLoggedIn && (
               <>
                 <li className="nav-item d-lg-none mt-3">
-                  <Link href="/auth/login" className="btn btn-primary w-100 mb-2 fw-semibold fs-5 btn-glow">
+                  <Link href="/auth/login" className="btn btn-primary w-100 mb-2 fw-semibold fs-5 btn-glow" onClick={closeMobileMenu}>
                     تسجيل الدخول
                   </Link>
-                  <Link href="/auth/register" className="btn btn-outline-secondary w-100 fw-semibold fs-5 btn-glow">
+                  <Link href="/auth/register" className="btn btn-outline-secondary w-100 fw-semibold fs-5 btn-glow" onClick={closeMobileMenu}>
                     التسجيل
                   </Link>
                 </li>

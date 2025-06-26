@@ -103,7 +103,8 @@ app.prepare().then(() => {
     pingInterval: 25000,
     cors: {
       origin: process.env.NODE_ENV === 'production'
-         ["http://localhost:3001", "http://127.0.0.1:3001"],
+        ? ["https://yourdomain.com"]
+        : ["http://localhost:3001", "http://127.0.0.1:3001"],
       methods: ["GET", "POST"],
       credentials: true,
       allowedHeaders: ["authorization", "content-type"]    },
@@ -639,7 +640,7 @@ app.prepare().then(() => {
   });
 
   // تعديل إعدادات الخادم
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.PORT || process.env.NEXT_PUBLIC_PORT || 3001;
   httpServer.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
     console.log(`Socket.IO server is running at http://localhost:${PORT}/api/socket`);

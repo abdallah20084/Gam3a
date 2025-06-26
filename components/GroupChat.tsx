@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaSearch, FaEllipsisV, FaImage, FaVideo, FaFileAlt, FaMicrophone, FaRegSmile, FaPaperPlane, FaTimes, FaEdit, FaTrash } from 'react-icons/fa';
 import data from '@emoji-mart/data';
-import Picker from '@emoji-mart/react';
+import { Picker } from 'emoji-mart';
 import DOMPurify from 'dompurify';
 import io from 'socket.io-client';
 import Image from 'next/image';
@@ -70,13 +70,17 @@ const GroupChat: React.FC<GroupChatProps> = ({
           return;
         }
 
-        const socketInstance = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000', {
+        const socketInstance = io(process.env.NEXT_PUBLIC_SOCKET_URL || `http://localhost:${process.env.NEXT_PUBLIC_PORT || 3001}`, {
           path: '/api/socket',
           query: { token, groupId }
         });
 
         socketInstance.on('connect', () => {
-          console.log('Connected to socket server');
+          console.log('🔗 Connected to socket server', {
+            id: socketInstance.id,
+            isMobile: window.innerWidth <= 768,
+            userAgent: navigator.userAgent.substring(0, 50)
+          });
           setIsConnected(true);
           // Join the group room
           socketInstance.emit('joinGroup', groupId, token);
@@ -192,37 +196,107 @@ const GroupChat: React.FC<GroupChatProps> = ({
   }, []);
 
   // Handle sending message
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('handleSendMessage called', { messageInput, socket: !!socket, isConnected });
+  const handleSendMessage = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
 
-    if (!messageInput.trim()) {
-      console.log('Message is empty');
+    const isMobile = window.innerWidth <= 768;
+    console.log('🚀 handleSendMessage called', {
+      messageInput: messageInput.substring(0, 20),
+      socket: !!socket,
+      isConnected,
+      isMobile,
+      userAgent: navigator.userAgent.substring(0, 50)
+    });
+
+    // Trim message and check if empty
+    const trimmedMessage = messageInput.trim();
+    if (!trimmedMessage) {
+      console.log('❌ Message is empty');
+
+      // Visual feedback for mobile
+      if (isMobile) {
+        const textarea = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
+        if (textarea) {
+          textarea.style.borderColor = '#dc3545';
+          textarea.focus();
+          setTimeout(() => {
+            textarea.style.borderColor = '';
+          }, 1500);
+        }
+      }
       return;
     }
 
     if (!socket) {
-      console.log('Socket not connected');
+      console.log('❌ Socket not connected');
+      if (isMobile) {
+        alert('غير متصل بالسيرفر - يرجى إعادة تحميل الصفحة');
+      } else {
+        alert('غير متصل بالسيرفر');
+      }
       return;
     }
 
     if (!isConnected) {
-      console.log('Not connected to server');
+      console.log('❌ Not connected to server');
+      if (isMobile) {
+        alert('الاتصال غير مستقر - يرجى المحاولة مرة أخرى');
+      } else {
+        alert('الاتصال غير مستقر');
+      }
       return;
     }
 
-    console.log('Sending message:', messageInput);
-    socket.emit("sendMessage", {
-      groupId,
-      content: messageInput,
-      token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
-      type: 'text',
-      replyTo: replyToMsg?.id || null,
-    });
+    console.log('✅ Sending message:', trimmedMessage.substring(0, 50));
 
-    setMessageInput('');
-    setReplyToMsg(null);
-    if (isTyping) handleTyping(false);
+    // Visual feedback - disable button temporarily
+    const sendButton = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (sendButton) {
+      sendButton.disabled = true;
+      sendButton.style.opacity = '0.6';
+      if (isMobile) {
+        sendButton.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
+      }
+    }
+
+    try {
+      socket.emit("sendMessage", {
+        groupId,
+        content: trimmedMessage,
+        token: typeof window !== 'undefined' ? localStorage.getItem('token') : null,
+        type: 'text',
+        replyTo: replyToMsg?.id || null,
+      });
+
+      console.log('✅ Message emitted successfully');
+      setMessageInput('');
+      setReplyToMsg(null);
+      if (isTyping) handleTyping(false);
+
+      // Re-enable button
+      setTimeout(() => {
+        if (sendButton) {
+          sendButton.disabled = false;
+          sendButton.style.opacity = '1';
+          if (isMobile) {
+            sendButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
+          }
+        }
+      }, 1000);
+
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
+      alert('حدث خطأ أثناء إرسال الرسالة');
+
+      // Re-enable button on error
+      if (sendButton) {
+        sendButton.disabled = false;
+        sendButton.style.opacity = '1';
+        if (isMobile) {
+          sendButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
+        }
+      }
+    }
   };
 
   // Handle typing indicator
@@ -288,6 +362,30 @@ const GroupChat: React.FC<GroupChatProps> = ({
       ...prev,
       [messageId]: !prev[messageId]
     }));
+  };
+
+  // Function to detect and format links in text
+  const formatTextWithLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, index) => {
+      if (urlRegex.test(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-decoration-underline"
+            style={{ color: 'inherit' }}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
   };
 
   // Handle file upload with NSFW check
@@ -692,8 +790,8 @@ const GroupChat: React.FC<GroupChatProps> = ({
                           // إضافة منطق تعديل المجموعة هنا
                           console.log('تعديل المجموعة');
                         }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#f8f9fa'}
+                        onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = 'transparent'}
                       >
                         <FaEdit className="me-2" size={14} />
                         تعديل المجموعة
@@ -712,8 +810,8 @@ const GroupChat: React.FC<GroupChatProps> = ({
                             console.log('حذف المجموعة');
                           }
                         }}
-                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
-                        onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                        onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#f8f9fa'}
+                        onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = 'transparent'}
                       >
                         <FaTrash className="me-2" size={14} />
                         حذف المجموعة
@@ -1035,7 +1133,17 @@ const GroupChat: React.FC<GroupChatProps> = ({
               </div>
             )}
             
-            <form onSubmit={handleSendMessage} className="d-flex align-items-end gap-2">
+            <form
+              onSubmit={(e) => {
+                console.log('📝 Form submitted', {
+                  isMobile: window.innerWidth <= 768,
+                  messageInput: messageInput.substring(0, 20),
+                  isConnected
+                });
+                handleSendMessage(e);
+              }}
+              className="d-flex align-items-end gap-2"
+            >
               <div className="flex-grow-1 bg-light rounded-4 px-3 py-2">
                 {/* Attachment Buttons - Responsive */}
                 <div className="d-flex gap-1 gap-md-2 mb-2 flex-wrap">
@@ -1117,37 +1225,71 @@ const GroupChat: React.FC<GroupChatProps> = ({
                     typingTimeoutRef.current = setTimeout(() => handleTyping(false), 2000);
                   }}
                   onKeyDown={e => {
+                    console.log('⌨️ Key pressed:', e.key, {
+                      isMobile: window.innerWidth <= 768,
+                      keyCode: e.keyCode,
+                      which: e.which
+                    });
+
                     if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      console.log('⌨️ Enter key pressed - sending message');
+                      handleSendMessage(e);
+                    }
+                  }}
+                  onKeyUp={e => {
+                    // Additional handler for mobile keyboards
+                    if ((e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey && window.innerWidth <= 768) {
+                      console.log('📱 Mobile Enter detected');
                       e.preventDefault();
                       handleSendMessage(e);
                     }
                   }}
                   rows={1}
                   style={{ resize: 'none', minHeight: '40px' }}
+                  inputMode="text"
+                  enterKeyHint="send"
+                  name="message"
                 />
               </div>
-              
-              {/* Send Button - Responsive */}
+
+              {/* Send Button - Mobile Optimized */}
               <button
-                type="submit"
-                className="btn btn-primary rounded-circle p-2 p-md-3"
+                type="button"
+                className="btn btn-primary d-flex align-items-center justify-content-center"
                 disabled={!isConnected || !messageInput.trim()}
                 title="إرسال الرسالة"
+                onClick={(e) => {
+                  console.log('📱 Send button clicked', {
+                    isMobile: window.innerWidth <= 768,
+                    disabled: !isConnected || !messageInput.trim(),
+                    messageLength: messageInput.length,
+                    isConnected
+                  });
+
+                  // Always prevent default and handle manually for better mobile support
+                  e.preventDefault();
+                  console.log('📱 Manual send triggered');
+                  handleSendMessage(e);
+                }}
+                style={{
+                  minWidth: window.innerWidth <= 768 ? '50px' : '44px',
+                  minHeight: window.innerWidth <= 768 ? '50px' : '44px',
+                  borderRadius: window.innerWidth <= 768 ? '12px' : '50%',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent'
+                }}
               >
-                <FaPaperPlane size={16} />
+                <FaPaperPlane size={window.innerWidth <= 768 ? 18 : 16} />
               </button>
             </form>
             
-            {/* Emoji Picker */}
-            {showEmoji && (
+            {/* Emoji Picker - Temporarily disabled */}
+            {false && showEmoji && (
               <div className="position-absolute bottom-100 end-0 mb-2 shadow-lg rounded-3 overflow-hidden" ref={emojiPickerRef}>
-                <Picker
-                  data={data}
-                  onEmojiSelect={handleEmojiSelect}
-                  theme="light"
-                  previewPosition="none"
-                  skinTonePosition="none"
-                />
+                <div className="p-3 bg-white rounded-3 shadow">
+                  <div className="text-center">Emoji Picker</div>
+                </div>
               </div>
             )}
             

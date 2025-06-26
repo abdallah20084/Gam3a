@@ -82,6 +82,9 @@ export default function RegisterPage() {
           localStorage.setItem('token', response.data.token);
           localStorage.setItem('userName', response.data.userName);
           localStorage.setItem('userId', response.data.userId);
+
+          // إرسال حدث لتحديث الـ Navbar
+          window.dispatchEvent(new Event('authStateChanged'));
         }
 
         setSuccessMessage(response.data.message || 'تم التسجيل بنجاح! جارٍ التوجيه...');
@@ -118,16 +121,21 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit)} autoComplete="off">
+            {/* Hidden fields to prevent browser autofill */}
+            <input type="email" name="email" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+            <input type="text" name="username" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" />
+
             <div className="mb-3">
               <label htmlFor="name" className="form-label fw-semibold">الاسم بالكامل</label>
               <input
                 id="name"
+                name="fullname"
                 type="text"
                 {...register('name')}
                 className={`form-control${errors.name ? ' is-invalid' : ''}`}
                 placeholder="الاسم بالكامل"
-                autoComplete="name"
+                autoComplete="off"
               />
               {errors.name && <div className="invalid-feedback">{errors.name.message}</div>}
             </div>
@@ -136,11 +144,12 @@ export default function RegisterPage() {
               <label htmlFor="phone" className="form-label fw-semibold">رقم واتساب</label>
               <input
                 id="phone"
+                name="mobile"
                 type="tel"
                 {...register('phone')}
                 className={`form-control${errors.phone ? ' is-invalid' : ''}`}
                 placeholder="01XXXXXXXXX"
-                autoComplete="username"
+                autoComplete="off"
               />
               {errors.phone && <div className="invalid-feedback">{errors.phone.message}</div>}
             </div>

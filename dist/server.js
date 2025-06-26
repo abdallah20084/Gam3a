@@ -85,7 +85,7 @@ app.prepare().then(() => {
         cors: {
             origin: process.env.NODE_ENV === 'production'
                 ? ["https://yourdomain.com"]
-                : ["http://localhost:3000", "http://127.0.0.1:3000"],
+                : ["http://localhost:3001", "http://127.0.0.1:3001"],
             methods: ["GET", "POST"],
             credentials: true,
             allowedHeaders: ["authorization", "content-type"]
@@ -303,13 +303,10 @@ app.prepare().then(() => {
             });
             // New Socket.IO Event: Delete Message
             socket.on('deleteMessage', async (data) => {
-                var _a;
                 try {
                     await (0, db_1.default)();
                     const { messageId, groupId, token } = data;
-                    console.log(`Socket ${socket.id}: Delete message request:`, { messageId, groupId });
                     if (!mongoose_1.default.Types.ObjectId.isValid(messageId) || !mongoose_1.default.Types.ObjectId.isValid(groupId)) {
-                        console.log(`Socket ${socket.id}: Invalid ObjectId - messageId: ${messageId}, groupId: ${groupId}`);
                         socket.emit('messageError', 'معرف رسالة أو مجموعة غير صالح للحذف.');
                         return;
                     }
@@ -326,14 +323,8 @@ app.prepare().then(() => {
                     }
                     // استخدام findOne بدلاً من findById().lean()
                     const messageToDelete = await Message_1.default.findOne({ _id: new mongoose_1.default.Types.ObjectId(messageId) }).lean();
-                    console.log(`Socket ${socket.id}: Message found:`, {
-                        messageExists: !!messageToDelete,
-                        messageGroupId: (_a = messageToDelete === null || messageToDelete === void 0 ? void 0 : messageToDelete.group) === null || _a === void 0 ? void 0 : _a.toString(),
-                        requestGroupId: groupId
-                    });
                     if (!messageToDelete) {
                         // إذا كانت الرسالة غير موجودة، أرسل حدث الحذف للعميل لإزالتها من الواجهة
-                        console.log(`Socket ${socket.id}: Message ${messageId} not found in database, removing from frontend`);
                         const deleterUser = await User_1.default.findById(userId, { name: 1 }).lean();
                         const deleterName = (deleterUser === null || deleterUser === void 0 ? void 0 : deleterUser.name) || 'مستخدم غير معروف';
                         if (io) {
@@ -583,7 +574,7 @@ app.prepare().then(() => {
         // لا تنهي العملية هنا، فقط سجل الخطأ
     });
     // تعديل إعدادات الخادم
-    const PORT = process.env.PORT || 3000;
+    const PORT = process.env.PORT || process.env.NEXT_PUBLIC_PORT || 3001;
     httpServer.listen(PORT, () => {
         console.log(`Server listening on port ${PORT}`);
         console.log(`Socket.IO server is running at http://localhost:${PORT}/api/socket`);

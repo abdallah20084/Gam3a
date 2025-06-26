@@ -13,6 +13,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'Gam3a5G.com',
   description: 'منصة تواصل اجتماعي جامعي',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
 };
 
 export default function RootLayout({
