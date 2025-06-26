@@ -70,10 +70,13 @@ const GroupChat: React.FC<GroupChatProps> = ({
           return;
         }
 
-        const socketInstance = io(process.env.NEXT_PUBLIC_SOCKET_URL || `http://localhost:${process.env.NEXT_PUBLIC_PORT || 3001}`, {
-          path: '/api/socket',
-          query: { token, groupId }
-        });
+        const socketInstance = io(
+          process.env.NEXT_PUBLIC_SOCKET_SERVER_URL!,
+          {
+            path: '/api/socket',
+            query: { token, groupId }
+          }
+        );
 
         socketInstance.on('connect', () => {
           console.log('🔗 Connected to socket server', {
