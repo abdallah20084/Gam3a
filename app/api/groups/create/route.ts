@@ -65,7 +65,6 @@ export async function POST(request: Request) {
     });
     await newGroupMember.save();
 
-
     // 3. تحديث المستخدم لإضافة المجموعة إلى "مجموعاتي"
     if (!user.groups) {
         user.groups = []; // تهيئة إذا لم تكن موجودة

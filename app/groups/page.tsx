@@ -16,6 +16,7 @@ interface Group {
   memberCount: number;
   createdAt: string;
   isAdmin?: boolean;
+  isMember?: boolean;
   coverImageUrl?: string;
 }
 
@@ -85,8 +86,8 @@ export default function GroupsPage() {
         {filteredGroups.length === 0 ? (
           <div className="col-12 text-center text-muted fs-4" key="no-groups">لا توجد جروبات بعد.</div>
         ) : (
-          filteredGroups.map(group => (
-            <div className="col-12 col-md-6 col-lg-4" key={group._id || group.id}>
+          filteredGroups.map((group, index) => (
+            <div className="col-12 col-md-6 col-lg-4" key={group._id || `group-${index}`}>
               <div className="card shadow-sm border-0" style={{ borderRadius: 18 }}>
                 <img src={group.coverImageUrl || '/default-group.png'} className="card-img-top" style={{ borderRadius: '18px 18px 0 0', height: 180, objectFit: 'cover' }} />
                 <div className="card-body text-center">
@@ -95,7 +96,13 @@ export default function GroupsPage() {
                     <span className="badge bg-info ms-2"><i className="bi bi-people"></i> {group.memberCount} أعضاء</span>
                   </div>
                   <p className="text-muted" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(group.description) }} />
-                  <Link href={`/group/${group._id || group.id}`} className="btn btn-primary btn-glow px-4 mt-2" style={{ borderRadius: 20 }}>دخول المجموعة</Link>
+                  <Link 
+                    href={`/groups/${group._id}`}
+                    className="btn btn-primary btn-glow px-4 mt-2" 
+                    style={{ borderRadius: 20 }}
+                  >
+                    دخول المجموعة
+                  </Link>
                 </div>
               </div>
             </div>

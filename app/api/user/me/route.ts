@@ -30,8 +30,12 @@ export async function GET(request: Request) {
     const user = await User.findById(userId).select('-password'); // لا ترجع كلمة المرور
 
     if (!user) {
-      console.warn(`User with ID ${userId.toString()} not found for /api/user/me.`);
-      return NextResponse.json({ success: false, error: 'المستخدم غير موجود' }, { status: 404 });
+      console.warn(`User with ID ${userId.toString()} not found for /api/user/me. Token may be invalid or user deleted.`);
+      return NextResponse.json({ 
+        success: false, 
+        error: 'المستخدم غير موجود في قاعدة البيانات. يرجى تسجيل الدخول مرة أخرى.',
+        redirectToLogin: true 
+      }, { status: 401 });
     }
 
     // إذا وصل هنا، فالتوكن صالح والمستخدم موجود.

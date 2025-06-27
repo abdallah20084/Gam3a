@@ -14,7 +14,8 @@ if (!JWT_SECRET) {
 const getUserIdFromToken = (token: string) => {
   try {
     const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string; isSuperAdmin?: boolean };
-    return new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
+    const userId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
+    return userId;
   } catch (error) {
     console.error('Invalid token:', error);
     return null;
@@ -32,8 +33,12 @@ export async function POST(
     return NextResponse.json({ error: 'معرف مجموعة غير صالح.' }, { status: 400 });
   }
 
-  const token = req.headers.get('authorization')?.split(' ')[1];
-  const userId = token ? getUserIdFromToken(token) : null;
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'غير مصرح لك. الرجاء تسجيل الدخول.' }, { status: 401 });
+  }
+  const token = authHeader.split(' ')[1];
+  const userId = getUserIdFromToken(token);
 
   if (!userId) {
     return NextResponse.json({ error: 'غير مصرح لك. الرجاء تسجيل الدخول.' }, { status: 401 });
@@ -83,8 +88,12 @@ export async function DELETE(
     return NextResponse.json({ error: 'معرف مجموعة غير صالح.' }, { status: 400 });
   }
 
-  const token = req.headers.get('authorization')?.split(' ')[1];
-  const userId = token ? getUserIdFromToken(token) : null;
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return NextResponse.json({ error: 'غير مصرح لك. الرجاء تسجيل الدخول.' }, { status: 401 });
+  }
+  const token = authHeader.split(' ')[1];
+  const userId = getUserIdFromToken(token);
 
   if (!userId) {
     return NextResponse.json({ error: 'غير مصرح لك. الرجاء تسجيل الدخول.' }, { status: 401 });

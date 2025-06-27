@@ -16,10 +16,18 @@ export default function LoginPage() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      axios.get('/api/user/me', {
+      // فحص التوكن مع الخادم
+      fetch('/api/user/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       }).then(res => {
-        if (res.status === 200) router.replace('/');
+        if (res.status === 200) {
+          router.replace('/');
+        } else {
+          // التوكن غير صالح أو المستخدم محذوف
+          localStorage.removeItem('token');
+          localStorage.removeItem('userId');
+          localStorage.removeItem('userName');
+        }
       }).catch(err => {
         localStorage.removeItem('token');
         localStorage.removeItem('userId');
@@ -119,7 +127,7 @@ export default function LoginPage() {
           </form>
           <div className="text-center mt-3">
             <span className="text-secondary small">ليس لديك حساب؟ </span>
-            <Link href="/auth/register" className="text-primary fw-bold small text-decoration-none">
+            <Link href="/register" className="text-primary fw-bold small text-decoration-none">
               سجل الآن
             </Link>
           </div>

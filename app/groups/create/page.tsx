@@ -60,7 +60,7 @@ export default function CreateGroupPage() {
         setName('');
         setDescription('');
         setCoverImageUrl('');
-        router.push(`/group/${response.data.group._id}`);
+        router.push(`/groups/${response.data.group._id}`);
       }
     } catch (err: any) {
       if (axios.isAxiosError(err) && err.response && err.response.data && err.response.data.error) {

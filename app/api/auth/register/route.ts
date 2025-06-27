@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
-import * as jwt from 'jsonwebtoken'; // <--- FIX: Corrected import to * as jwt
+import * as jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 
 // تأكد أن هذا المفتاح السري يطابق تماماً المفتاح في ملف .env
@@ -44,9 +44,9 @@ export async function POST(request: Request) {
 
     // هنا يتم توقيع الرمز المميز
     const token = jwt.sign(
-      { id: newUser._id.toString(), phone: newUser.phone, name: newUser.name }, // استخدم .toString() لـ _id
-      JWT_SECRET, // <--- استخدام المفتاح السري المعرف
-      { expiresIn: '7d' } // 7 أيام
+      { id: (newUser._id as any).toString(), phone: newUser.phone, name: newUser.name },
+      JWT_SECRET as string,
+      { expiresIn: '7d' }
     );
 
     // إرجاع userId و userName بالإضافة إلى التوكن
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
         message: 'تم التسجيل بنجاح!',
         token,
         userName: newUser.name,
-        userId: newUser._id.toString() // <--- FIX: Add userId to the response
+        userId: (newUser._id as any).toString()
     }, { status: 201 });
 
   } catch (error: any) {

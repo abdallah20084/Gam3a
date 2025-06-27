@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import Script from 'next/script';
+import { validateTokenWithServer } from '@/lib/auth';
 
 // تعريف window.bootstrap لتجنب أخطاء TypeScript
 declare global {
@@ -19,8 +20,23 @@ export default function Navbar() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const checkAuthStatus = () => {
+    const checkAuthStatus = async () => {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      
+      if (token) {
+        // فحص التوكن مع الخادم
+        const isValid = await validateTokenWithServer(token);
+        if (!isValid) {
+          // التوكن غير صالح أو المستخدم محذوف
+          localStorage.removeItem('token');
+          localStorage.removeItem('userId');
+          localStorage.removeItem('userName');
+          setIsLoggedIn(false);
+          setUserName(null);
+          return;
+        }
+      }
+      
       setIsLoggedIn(!!token);
       setUserName(localStorage.getItem('userName'));
     };
@@ -183,10 +199,10 @@ export default function Navbar() {
             {!isLoggedIn && (
               <>
                 <li className="nav-item d-lg-none mt-3">
-                  <Link href="/auth/login" className="btn btn-primary w-100 mb-2 fw-semibold fs-5 btn-glow" onClick={closeMobileMenu}>
+                  <Link href="/login" className="btn btn-primary w-100 mb-2 fw-semibold fs-5 btn-glow" onClick={closeMobileMenu}>
                     تسجيل الدخول
                   </Link>
-                  <Link href="/auth/register" className="btn btn-outline-secondary w-100 fw-semibold fs-5 btn-glow" onClick={closeMobileMenu}>
+                  <Link href="/register" className="btn btn-outline-secondary w-100 fw-semibold fs-5 btn-glow" onClick={closeMobileMenu}>
                     التسجيل
                   </Link>
                 </li>
@@ -291,10 +307,10 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <Link href="/auth/login" className="btn btn-primary fw-bold px-3 fs-5 btn-glow">
+                <Link href="/login" className="btn btn-primary fw-bold px-3 fs-5 btn-glow">
                   تسجيل الدخول
                 </Link>
-                <Link href="/auth/register" className="btn btn-outline-secondary fw-bold px-3 fs-5 btn-glow">
+                <Link href="/register" className="btn btn-outline-secondary fw-bold px-3 fs-5 btn-glow">
                   التسجيل
                 </Link>
               </>
@@ -303,8 +319,6 @@ export default function Navbar() {
         </div>
       </div>
     </nav>
-    {/* تحميل Bootstrap JS */}
-    <BootstrapScript />
     </>
   );
 }

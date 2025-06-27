@@ -97,18 +97,22 @@ app.prepare().then(() => {
   });
 
   io = new SocketIOServer(httpServer, {
-    path: '/api/socket',
     addTrailingSlash: false,
     pingTimeout: 60000,
     pingInterval: 25000,
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
+      origin: '*',
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
-      allowedHeaders: ["authorization", "content-type"]    },
-    transports: ['polling', 'websocket'], // البدء بـ polling ثم الترقية إلى websocket
+      allowedHeaders: ["authorization", "content-type", "x-requested-with"]
+    },
+    transports: [ 'websocket'],
     allowEIO3: true,
-    connectTimeout: 45000, // زيادة مهلة الاتصال
+    connectTimeout: 45000,
+    maxHttpBufferSize: 1e8, // 100MB
+    allowRequest: (req, callback) => {
+      callback(null, true);
+    }
   });
 
   console.log('Socket.IO: Server initialized successfully via custom server.');
@@ -127,6 +131,8 @@ app.prepare().then(() => {
 
     io.on('connection', (socket) => {
       console.log(`Socket.IO: Client connected - ID: ${socket.id}`);
+      console.log(`Socket.IO: Client IP: ${socket.handshake.address}`);
+      console.log(`Socket.IO: Client headers:`, socket.handshake.headers);
 
       const updateActivity = () => {
         const user = connectedUsers.get(socket.id);
@@ -194,8 +200,9 @@ app.prepare().then(() => {
             io.emit('userStatusUpdate', { userId: userId.toString(), isOnline: true });
           }
 
-          // بث رسالة انضمام عضو جديد
-          if (io) {
+          // بث رسالة انضمام عضو جديد (فقط إذا لم يكن الأدمن)
+          const isAdmin = await GroupMember.exists({ group: groupId, user: userId, role: 'admin' });
+          if (io && !isAdmin) {
             io.to(groupId).emit('receiveMessage', {
               id: new mongoose.Types.ObjectId().toString(),
               groupId,
@@ -209,7 +216,7 @@ app.prepare().then(() => {
           }
 
           // جلب الرسائل القديمة
-          const oldMessages = await Message.find({ group: groupId })
+          const oldMessages = await Message.find({ group: groupId, content: { $ne: "" } })
             .sort({ timestamp: -1 })
             .limit(50)
             .populate('sender', 'name avatar')
@@ -640,8 +647,8 @@ app.prepare().then(() => {
   // تعديل إعدادات الخادم
   const PORT = Number(process.env.PORT) || 3001;
   const SERVER_IP = process.env.SERVER_IP || '0.0.0.0';
-  httpServer.listen(PORT, SERVER_IP, () => {
-    console.log(`Server listening on http://${SERVER_IP}:${PORT}`);
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
     console.log(`Socket.IO server is running at http://localhost:${PORT}/api/socket`);
   });
 

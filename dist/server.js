@@ -78,19 +78,33 @@ app.prepare().then(() => {
         handle(req, res, parsedUrl);
     });
     io = new socket_io_1.Server(httpServer, {
-        path: '/api/socket',
         addTrailingSlash: false,
         pingTimeout: 60000,
         pingInterval: 25000,
         cors: {
-            origin: "*",
-            methods: ["GET", "POST"],
+            origin: [
+                "http://localhost:3001",
+                "http://127.0.0.1:3001",
+                "https://localhost:3001",
+                "https://127.0.0.1:3001",
+                "https://gam3a5g.com",
+                "http://gam3a5g.com",
+                "https://www.gam3a5g.com",
+                "http://www.gam3a5g.com",
+                "*"
+            ],
+            methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             credentials: true,
-            allowedHeaders: ["authorization", "content-type"]
+            allowedHeaders: ["authorization", "content-type", "x-requested-with"]
         },
-        transports: ['polling', 'websocket'], // البدء بـ polling ثم الترقية إلى websocket
+        transports: ['websocket'],
         allowEIO3: true,
-        connectTimeout: 45000, // زيادة مهلة الاتصال
+        connectTimeout: 45000,
+        maxHttpBufferSize: 1e8, // 100MB
+        allowRequest: (req, callback) => {
+            // السماح بجميع الطلبات من أي مصدر
+            callback(null, true);
+        }
     });
     console.log('Socket.IO: Server initialized successfully via custom server.');
     console.log(`Server using JWT_SECRET for verification (first 10 chars): ${JWT_SECRET.substring(0, 10)}...`);
@@ -107,6 +121,8 @@ app.prepare().then(() => {
         }, 60000);
         io.on('connection', (socket) => {
             console.log(`Socket.IO: Client connected - ID: ${socket.id}`);
+            console.log(`Socket.IO: Client IP: ${socket.handshake.address}`);
+            console.log(`Socket.IO: Client headers:`, socket.handshake.headers);
             const updateActivity = () => {
                 const user = connectedUsers.get(socket.id);
                 if (user) {
@@ -165,8 +181,9 @@ app.prepare().then(() => {
                     if (userConnectionCount.get(userId.toString()) === 1 && io) {
                         io.emit('userStatusUpdate', { userId: userId.toString(), isOnline: true });
                     }
-                    // بث رسالة انضمام عضو جديد
-                    if (io) {
+                    // بث رسالة انضمام عضو جديد (فقط إذا لم يكن الأدمن)
+                    const isAdmin = await GroupMember_1.default.exists({ group: groupId, user: userId, role: 'admin' });
+                    if (io && !isAdmin) {
                         io.to(groupId).emit('receiveMessage', {
                             id: new mongoose_1.default.Types.ObjectId().toString(),
                             groupId,
@@ -179,7 +196,7 @@ app.prepare().then(() => {
                         });
                     }
                     // جلب الرسائل القديمة
-                    const oldMessages = await Message_1.default.find({ group: groupId })
+                    const oldMessages = await Message_1.default.find({ group: groupId, content: { $ne: "" } })
                         .sort({ timestamp: -1 })
                         .limit(50)
                         .populate('sender', 'name avatar')
@@ -574,8 +591,8 @@ app.prepare().then(() => {
     // تعديل إعدادات الخادم
     const PORT = Number(process.env.PORT) || 3001;
     const SERVER_IP = process.env.SERVER_IP || '0.0.0.0';
-    httpServer.listen(PORT, SERVER_IP, () => {
-        console.log(`Server listening on http://${SERVER_IP}:${PORT}`);
+    httpServer.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on port ${PORT}`);
         console.log(`Socket.IO server is running at http://localhost:${PORT}/api/socket`);
     });
     // إضافة معالجة إغلاق الخادم بشكل آمن

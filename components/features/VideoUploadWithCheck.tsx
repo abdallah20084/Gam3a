@@ -54,7 +54,7 @@ async function convertTo360p(file: File): Promise<Blob> {
   ]);
 
   const data = ffmpeg.readFile('out.mp4');
-  return new Blob([data], { type: 'video/mp4' });
+  return new Blob([await data], { type: 'video/mp4' });
 }
 
 export default function VideoUploadWithCheck({

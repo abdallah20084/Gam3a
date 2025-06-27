@@ -48,12 +48,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Check if user is a member of the group
+    console.log(`🔍 Checking membership for user ${userId} in group ${groupId}`);
     const isMember = await GroupMember.exists({
       group: groupId,
       user: userId
     });
 
+    console.log(`📋 Membership result: ${isMember}`);
+
     if (!isMember) {
+      console.log(`❌ User ${userId} is not a member of group ${groupId}`);
       return NextResponse.json({ success: false, error: 'أنت لست عضوًا في هذه المجموعة.' }, { status: 403 });
     }
 
@@ -135,12 +139,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Check if user is a member of the group
+    console.log(`🔍 Checking membership for user ${userId} in group ${groupId}`);
     const isMember = await GroupMember.exists({
       group: groupId,
       user: userId
     });
 
+    console.log(`📋 Membership result: ${isMember}`);
+
     if (!isMember) {
+      console.log(`❌ User ${userId} is not a member of group ${groupId}`);
       return NextResponse.json({ success: false, error: 'أنت لست عضوًا في هذه المجموعة.' }, { status: 403 });
     }
 
@@ -161,7 +169,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Format message for response
     const formattedMessage = {
-      id: newMessage._id.toString(),
+      id: (newMessage._id as any).toString(),
       content: newMessage.content,
       type: newMessage.type,
       senderId: (newMessage.sender as any)?._id?.toString() || newMessage.sender.toString(),

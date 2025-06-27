@@ -33,7 +33,11 @@ export async function POST(req: NextRequest) {
   await connectDB(); // الاتصال بقاعدة البيانات
 
   try {
-    const token = req.headers.get('authorization')?.split(' ')[1];
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'غير مصرح لك. الرجاء تسجيل الدخول.' }, { status: 401 });
+    }
+    const token = authHeader.split(' ')[1];
     const { userId } = getAuthDetailsFromToken(token || '');
 
     if (!userId) {
@@ -57,11 +61,12 @@ export async function POST(req: NextRequest) {
     });
 
     // إضافة مسؤول المجموعة كأول عضو فيها
-    await GroupMember.create({
+    const adminMember = new GroupMember({
         group: newGroup._id,
         user: userId,
         role: 'admin', // تعيين دور المسؤول
     });
+    await adminMember.save();
 
     // زيادة عدد الأعضاء في المجموعة بعد إضافة المسؤول
     newGroup.memberCount = 1;
@@ -93,7 +98,7 @@ export async function GET(req: NextRequest) {
 
   if (token) {
     try {
-      const decodedToken = jwt.verify(token, JWT_SECRET) as { id?: string; userId?: string; isSuperAdmin?: boolean };
+      const decodedToken = jwt.verify(token, JWT_SECRET as string) as { id?: string; userId?: string; isSuperAdmin?: boolean };
       currentUserId = new mongoose.Types.ObjectId(String(decodedToken.id || decodedToken.userId));
     } catch (jwtError) {
       console.warn('Invalid token for fetching groups:', jwtError);
@@ -150,12 +155,13 @@ export async function GET(req: NextRequest) {
         }
 
         return {
-          id: group._id.toString(),
+          _id: (group._id as any).toString(),
           name: group.name,
           description: group.description,
           coverImageUrl: group.coverImageUrl,
           adminId: group.admin.toString(),
           memberCount: group.memberCount,
+          createdAt: group.createdAt?.toISOString(),
           isMember: isMember,
           isAdmin: isAdminOfThisGroup,
           canEdit: canEdit,

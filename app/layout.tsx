@@ -1,11 +1,10 @@
 // app/layout.tsx
-import './styles/globals.css';
-import './styles/group-chat.css';
+import './globals.css';
+import './group-chat.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import { Inter } from 'next/font/google';
 import Navbar from '@/components/Navbar';
-import Script from 'next/script';
 import BootstrapClient from './bootstrap-client';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -13,7 +12,13 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata = {
   title: 'Gam3a5G.com',
   description: 'منصة تواصل اجتماعي جامعي',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

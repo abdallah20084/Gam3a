@@ -23,6 +23,11 @@ interface GroupDetails {
 export default function EditGroupPage() {
   const params = useParams();
   const router = useRouter();
+  
+  if (!params?.groupId) {
+    return <div>معرف المجموعة غير صحيح</div>;
+  }
+  
   const groupId = params.groupId as string;
 
   const [group, setGroup] = useState<GroupDetails | null>(null);

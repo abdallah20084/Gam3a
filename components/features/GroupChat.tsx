@@ -16,6 +16,79 @@ interface GroupChatProps {
   isAdmin?: boolean; // إضافة معلومة الأدمن
 }
 
+// MembersList component for both sidebar and offcanvas
+const MembersList: React.FC<{
+  members: any[];
+  onlineUsers: Set<string>;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
+}> = ({ members, onlineUsers, searchQuery, setSearchQuery }) => (
+  <>
+    <div className="p-3 border-bottom">
+      <h5 className="fw-bold mb-3 text-center">الأعضاء</h5>
+      <div className="position-relative mb-3">
+        <input
+          type="text"
+          className="form-control bg-light border-0 rounded-pill"
+          placeholder="بحث..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <FaSearch className="position-absolute top-50 translate-middle-y end-0 me-3 text-muted" />
+      </div>
+      <div className="d-flex justify-content-between align-items-center mb-2">
+        <small className="text-muted">متصل: {onlineUsers.size}</small>
+        <small className="text-muted">الكل: {members.length}</small>
+      </div>
+    </div>
+    <div className="p-2">
+      {members
+        .filter(member => member.name.includes(searchQuery))
+        .map((member) => (
+          <div
+            key={member.id || member._id}
+            className="d-flex align-items-center p-2 rounded-3 mb-2 hover-bg-light"
+            dir="rtl"
+          >
+            <div className="position-relative me-2">
+              {member.avatar ? (
+                <img
+                  src={member.avatar}
+                  alt={member.name}
+                  className="rounded-circle"
+                  width="40"
+                  height="40"
+                  style={{ objectFit: 'cover' }}
+                />
+              ) : (
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    background: 'linear-gradient(135deg, #3b82f6, #1e40af)'
+                  }}
+                >
+                  {member.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span
+                className={`position-absolute bottom-0 start-0 rounded-circle border border-white ${onlineUsers.has(member.id || member._id) ? 'bg-success' : 'bg-secondary'}`}
+                style={{ width: 10, height: 10 }}
+              ></span>
+            </div>
+            <div className="ms-2 flex-grow-1">
+              <div className="fw-medium">{member.name}</div>
+              <small className="text-muted">
+                {onlineUsers.has(member.id || member._id) ? 'متصل الآن' : 'غير متصل'}
+              </small>
+            </div>
+          </div>
+        ))}
+    </div>
+  </>
+);
+
 const GroupChat: React.FC<GroupChatProps> = ({
   groupId,
   userId,
@@ -70,36 +143,97 @@ const GroupChat: React.FC<GroupChatProps> = ({
           return;
         }
 
+        // Prevent multiple connections
+        if (socket && socket.connected) {
+          console.log('🔗 Socket already connected, skipping initialization');
+          return;
+        }
+
+        console.log('🔌 Initializing socket connection...');
+
         const socketInstance = io(
-          process.env.NEXT_PUBLIC_SOCKET_SERVER_URL!,
           {
-            path: '/api/socket',
+            transports: ['websocket'], // Force WebSocket only
+            timeout: 45000,
+            forceNew: false, // Changed to false to prevent multiple connections
+            reconnection: true,
+            reconnectionAttempts: 3, // Reduced from 5
+            reconnectionDelay: 2000, // Increased from 1000
+            reconnectionDelayMax: 10000, // Increased from 5000
             query: { token, groupId }
           }
         );
 
+        // Connection event handlers
         socketInstance.on('connect', () => {
           console.log('🔗 Connected to socket server', {
             id: socketInstance.id,
             isMobile: window.innerWidth <= 768,
-            userAgent: navigator.userAgent.substring(0, 50)
+            userAgent: navigator.userAgent.substring(0, 50),
+            serverUrl: '/api/socket'
           });
           setIsConnected(true);
-          // Join the group room
+          
+          // Join the group room only after successful connection
+          console.log('🤝 Joining group room:', groupId);
           socketInstance.emit('joinGroup', groupId, token);
         });
 
-        socketInstance.on('disconnect', () => {
-          console.log('Disconnected from socket server');
+        socketInstance.on('connect_error', (error) => {
+          console.error('🔴 Socket connection error:', error);
           setIsConnected(false);
+          
+          // Don't show alert immediately, let reconnection handle it
+          if (error.message.includes('authentication')) {
+            console.error('🔑 Authentication error in socket connection');
+            // Handle auth error gracefully
+          }
         });
 
+        socketInstance.on('disconnect', (reason) => {
+          console.log('🔌 Disconnected from socket server:', reason);
+          setIsConnected(false);
+          
+          // Only attempt reconnection for certain reasons
+          if (reason === 'io server disconnect') {
+            console.log('🔄 Server disconnected, attempting reconnection...');
+            // Let the socket handle reconnection automatically
+          } else if (reason === 'io client disconnect') {
+            console.log('👤 Client disconnected intentionally');
+          }
+        });
+
+        // Group join event handlers
+        socketInstance.on('joinedGroup', (data) => {
+          console.log('✅ Successfully joined group:', data.groupId);
+          console.log('📨 Received initial messages:', data.messages?.length || 0);
+          
+          // Set initial messages from socket
+          if (data.messages && data.messages.length > 0) {
+            setMessages(data.messages);
+          }
+        });
+
+        socketInstance.on('errorJoiningGroup', (error) => {
+          console.error('❌ Error joining group via socket:', error);
+          setIsConnected(false);
+          
+          // Handle specific errors
+          if (error.includes('غير مصرح')) {
+            console.log('🔒 User not authorized to join group');
+            // This should be handled by the page component
+          }
+        });
+
+        // Message event handlers
         socketInstance.on('receiveMessage', (message) => {
+          console.log('📨 Received new message:', message.id);
           setMessages(prev => {
             const prevMessages = prev || [];
-            // تأكد إن الرسالة مش موجودة فعلاً
+            // Check if message already exists
             const messageExists = prevMessages.some(msg => msg.id === message.id);
             if (messageExists) {
+              console.log('⚠️ Message already exists, skipping');
               return prevMessages;
             }
             return [...prevMessages, message];
@@ -107,6 +241,7 @@ const GroupChat: React.FC<GroupChatProps> = ({
         });
 
         socketInstance.on('userStatusUpdate', ({ userId, isOnline }) => {
+          console.log('👤 User status update:', userId, isOnline);
           setOnlineUsers(prev => {
             const newSet = new Set(prev);
             if (isOnline) {
@@ -118,31 +253,46 @@ const GroupChat: React.FC<GroupChatProps> = ({
           });
         });
 
-        // Handle socket errors
+        // Error handlers
         socketInstance.on('messageError', (error) => {
-          console.error('Message error:', error);
-          alert(error);
+          console.error('❌ Message error:', error);
+          // Show error in a more user-friendly way
+          if (typeof window !== 'undefined') {
+            // Use a toast or notification instead of alert
+            console.warn('Message error:', error);
+          }
         });
 
         socketInstance.on('authError', (error) => {
-          console.error('Auth error:', error);
-          alert(error);
+          console.error('🔑 Auth error:', error);
+          setIsConnected(false);
+          
+          // Handle auth error gracefully
+          if (typeof window !== 'undefined') {
+            console.warn('Authentication error:', error);
+            // Redirect to login or show login prompt
+          }
         });
 
-        socketInstance.on('typing', ({ userId, typing }) => {
-          setTypingUsers(prev => {
-            const newSet = new Set(prev);
-            if (typing) {
-              newSet.add(userId);
-            } else {
-              newSet.delete(userId);
-            }
-            return newSet;
-          });
+        // Typing indicators
+        socketInstance.on('userTyping', ({ userId, isTyping, groupId: typingGroupId }) => {
+          if (typingGroupId === groupId) {
+            console.log('⌨️ User typing:', userId, isTyping);
+            setTypingUsers(prev => {
+              const newSet = new Set(prev);
+              if (isTyping) {
+                newSet.add(userId);
+              } else {
+                newSet.delete(userId);
+              }
+              return newSet;
+            });
+          }
         });
 
-        // Handle message edited
+        // Message editing and deletion
         socketInstance.on('messageEdited', ({ messageId, newContent, isEdited }) => {
+          console.log('✏️ Message edited:', messageId);
           setMessages(prev => prev.map(msg =>
             msg.id === messageId
               ? { ...msg, content: newContent, isEdited: true }
@@ -150,8 +300,8 @@ const GroupChat: React.FC<GroupChatProps> = ({
           ));
         });
 
-        // Handle message deleted
         socketInstance.on('messageDeleted', ({ messageId, deletedBy }) => {
+          console.log('🗑️ Message deleted:', messageId, 'by:', deletedBy);
           setMessages(prev => prev.map(msg =>
             msg.id === messageId
               ? { ...msg, content: `تم حذف هذه الرسالة بواسطة ${deletedBy}`, isDeleted: true, type: 'text' }
@@ -159,18 +309,34 @@ const GroupChat: React.FC<GroupChatProps> = ({
           ));
         });
 
+        // Set socket instance
         setSocket(socketInstance);
 
+        // Cleanup function
         return () => {
-          socketInstance.disconnect();
+          console.log('🧹 Cleaning up socket connection');
+          if (socketInstance && socketInstance.connected) {
+            socketInstance.disconnect();
+          }
         };
       } catch (error) {
-        console.error('Socket initialization error:', error);
+        console.error('❌ Socket initialization error:', error);
       }
     };
 
-    socketInitializer();
-  }, [groupId]);
+    // Only initialize if we have a groupId and userId
+    if (groupId && userId) {
+      socketInitializer();
+    }
+
+    // Cleanup on unmount or when groupId/userId changes
+    return () => {
+      if (socket && socket.connected) {
+        console.log('🧹 Disconnecting socket on cleanup');
+        socket.disconnect();
+      }
+    };
+  }, [groupId, userId]); // Only depend on groupId and userId
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -577,85 +743,7 @@ const GroupChat: React.FC<GroupChatProps> = ({
 
         {/* Desktop Sidebar - Members */}
         <div className="col-md-3 border-end bg-white d-none d-md-block" style={{ height: '100vh', overflowY: 'auto' }}>
-          <div className="p-3 border-bottom">
-            <h5 className="fw-bold mb-3 text-center">الأعضاء</h5>
-            <div className="position-relative mb-3">
-              <input
-                type="text"
-                className="form-control bg-light border-0 rounded-pill"
-                placeholder="بحث..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <FaSearch className="position-absolute top-50 translate-middle-y end-0 me-3 text-muted" />
-            </div>
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <small className="text-muted">متصل: {onlineUsers.size}</small>
-              <small className="text-muted">الكل: {members.length}</small>
-            </div>
-          </div>
-          <div className="p-3 border-bottom">
-            <h5 className="fw-bold mb-3 text-center">الأعضاء</h5>
-            <div className="position-relative mb-3">
-              <input 
-                type="text" 
-                className="form-control bg-light border-0 rounded-pill" 
-                placeholder="بحث..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <FaSearch className="position-absolute top-50 translate-middle-y end-0 me-3 text-muted" />
-            </div>
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <small className="text-muted">متصل: {onlineUsers.size}</small>
-              <small className="text-muted">الكل: {members.length}</small>
-            </div>
-          </div>
-          
-          <div className="p-2">
-            {members
-              .filter(member => member.name.includes(searchQuery))
-              .map((member) => (
-                <div 
-                  key={member.id} 
-                  className="d-flex align-items-center p-2 rounded-3 mb-2 hover-bg-light"
-                >
-                  <div className="position-relative me-2">
-                    {member.avatar ? (
-                      <img 
-                        src={member.avatar} 
-                        alt={member.name} 
-                        className="rounded-circle" 
-                        width="40" 
-                        height="40"
-                        style={{ objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div 
-                        className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" 
-                        style={{ 
-                          width: 40, 
-                          height: 40, 
-                          background: 'linear-gradient(135deg, #3b82f6, #1e40af)' 
-                        }}
-                      >
-                        {member.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <span 
-                      className={`position-absolute bottom-0 start-0 rounded-circle border border-white ${onlineUsers.has(member.id) ? 'bg-success' : 'bg-secondary'}`} 
-                      style={{ width: 10, height: 10 }}
-                    ></span>
-                  </div>
-                  <div className="ms-2 flex-grow-1">
-                    <div className="fw-medium">{member.name}</div>
-                    <small className="text-muted">
-                      {onlineUsers.has(member.id) ? 'متصل الآن' : 'غير متصل'}
-                    </small>
-                  </div>
-                </div>
-              ))}
-          </div>
+          <MembersList members={members} onlineUsers={onlineUsers} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
         </div>
         
         {/* Mobile Offcanvas for Members */}
@@ -665,67 +753,7 @@ const GroupChat: React.FC<GroupChatProps> = ({
             <button type="button" className="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
           </div>
           <div className="offcanvas-body p-0">
-            <div className="p-3 border-bottom">
-              <div className="position-relative mb-3">
-                <input
-                  type="text"
-                  className="form-control bg-light border-0 rounded-pill"
-                  placeholder="بحث..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                <FaSearch className="position-absolute top-50 translate-middle-y end-0 me-3 text-muted" />
-              </div>
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <small className="text-muted">متصل: {onlineUsers.size}</small>
-                <small className="text-muted">الكل: {members.length}</small>
-              </div>
-            </div>
-
-            <div className="p-2">
-              {members
-                .filter(member => member.name.includes(searchQuery))
-                .map((member) => (
-                  <div
-                    key={member.id}
-                    className="d-flex align-items-center p-2 rounded-3 mb-2"
-                  >
-                    <div className="position-relative me-2">
-                      {member.avatar ? (
-                        <img
-                          src={member.avatar}
-                          alt={member.name}
-                          className="rounded-circle"
-                          width="40"
-                          height="40"
-                          style={{ objectFit: 'cover' }}
-                        />
-                      ) : (
-                        <div
-                          className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                          style={{
-                            width: 40,
-                            height: 40,
-                            background: 'linear-gradient(135deg, #3b82f6, #1e40af)'
-                          }}
-                        >
-                          {member.name.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                      <span
-                        className={`position-absolute bottom-0 start-0 rounded-circle border border-white ${onlineUsers.has(member.id) ? 'bg-success' : 'bg-secondary'}`}
-                        style={{ width: 10, height: 10 }}
-                      ></span>
-                    </div>
-                    <div className="ms-2 flex-grow-1">
-                      <div className="fw-medium">{member.name}</div>
-                      <small className="text-muted">
-                        {onlineUsers.has(member.id) ? 'متصل الآن' : 'غير متصل'}
-                      </small>
-                    </div>
-                  </div>
-                ))}
-            </div>
+            <MembersList members={members} onlineUsers={onlineUsers} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
           </div>
         </div>
 
@@ -870,20 +898,22 @@ const GroupChat: React.FC<GroupChatProps> = ({
           
           {/* Messages */}
           <div 
-            className="flex-grow-1 p-3 overflow-auto" 
+            className="flex-grow-1 p-3 overflow-auto chat-messages" 
             style={{ 
               background: 'linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%)',
-              scrollBehavior: 'smooth' 
+              scrollBehavior: 'smooth',
+              direction: 'rtl',
+              textAlign: 'right'
             }}
           >
             {filteredMessages && filteredMessages.length > 0 ? (
-              <div className="d-flex flex-column gap-3">
+              <div className="d-flex flex-column gap-3" dir="rtl">
                 {filteredMessages.map((msg, index) => (
-                  <div key={`${msg.id}-${index}`} className={`d-flex ${msg.senderId === userId ? 'justify-content-end' : 'justify-content-start'}`}>
-                    <div className={`d-flex ${msg.senderId === userId ? 'flex-row-reverse' : 'flex-row'}`} style={{ maxWidth: '75%' }}>
+                  <div key={`${msg.id}-${index}`} className={`d-flex ${msg.senderId === userId ? 'justify-content-start' : 'justify-content-end'}`}>
+                    <div className={`d-flex ${msg.senderId === userId ? 'flex-row' : 'flex-row-reverse'}`} style={{ maxWidth: '75%' }}>
                       {/* Avatar (only for received messages) */}
                       {msg.senderId !== userId && (
-                        <div className="me-2">
+                        <div className="ms-2">
                           {msg.senderAvatar ? (
                             <img 
                               src={msg.senderAvatar} 
@@ -1037,7 +1067,7 @@ const GroupChat: React.FC<GroupChatProps> = ({
                           ) : (
                             <>
                               {msg.type === 'text' && (
-                                <div>
+                                <div dir="rtl" style={{ textAlign: 'right' }} className="chat-message-content">
                                   <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }} />
                                   {msg.isEdited && (
                                     <small className={`ms-2 ${msg.senderId === userId ? 'text-light' : 'text-muted'}`}>
@@ -1116,7 +1146,7 @@ const GroupChat: React.FC<GroupChatProps> = ({
           </div>
           
           {/* Input Area */}
-          <div className="p-3 border-top bg-white">
+          <div className="p-3 border-top bg-white chat-input-area">
             {/* Reply Preview */}
             {replyToMsg && (
               <div className="d-flex justify-content-between align-items-center bg-light p-2 rounded-3 mb-2">
@@ -1153,7 +1183,10 @@ const GroupChat: React.FC<GroupChatProps> = ({
                   <button
                     type="button"
                     className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
-                    onClick={() => document.getElementById('image-upload').click()}
+                    onClick={() => {
+                      const element = document.getElementById('image-upload');
+                      if (element) element.click();
+                    }}
                     title="إضافة صورة"
                   >
                     <FaImage size={14} />
@@ -1169,7 +1202,10 @@ const GroupChat: React.FC<GroupChatProps> = ({
                   <button
                     type="button"
                     className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
-                    onClick={() => document.getElementById('video-upload').click()}
+                    onClick={() => {
+                      const element = document.getElementById('video-upload');
+                      if (element) element.click();
+                    }}
                     title="إضافة فيديو"
                   >
                     <FaVideo size={14} />
@@ -1185,7 +1221,10 @@ const GroupChat: React.FC<GroupChatProps> = ({
                   <button
                     type="button"
                     className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
-                    onClick={() => document.getElementById('file-upload').click()}
+                    onClick={() => {
+                      const element = document.getElementById('file-upload');
+                      if (element) element.click();
+                    }}
                     title="إضافة ملف"
                   >
                     <FaFileAlt size={14} />
@@ -1249,10 +1288,11 @@ const GroupChat: React.FC<GroupChatProps> = ({
                     }
                   }}
                   rows={1}
-                  style={{ resize: 'none', minHeight: '40px' }}
+                  style={{ resize: 'none', minHeight: '40px', direction: 'rtl', textAlign: 'right' }}
                   inputMode="text"
                   enterKeyHint="send"
                   name="message"
+                  dir="rtl"
                 />
               </div>
 

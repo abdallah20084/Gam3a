@@ -36,7 +36,7 @@ export default function RegisterPage() {
       const token = localStorage.getItem('token');
       if (token) {
         try {
-          const response = await axios.get('/api/user/me', { 
+          const response = await fetch('/api/user/me', { 
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -44,6 +44,7 @@ export default function RegisterPage() {
           if (response.status === 200) {
             router.replace('/');
           } else {
+            // التوكن غير صالح أو المستخدم محذوف
             localStorage.removeItem('token');
             localStorage.removeItem('userId');
             localStorage.removeItem('userName');
@@ -130,7 +131,6 @@ export default function RegisterPage() {
               <label htmlFor="name" className="form-label fw-semibold">الاسم بالكامل</label>
               <input
                 id="name"
-                name="fullname"
                 type="text"
                 {...register('name')}
                 className={`form-control${errors.name ? ' is-invalid' : ''}`}
@@ -144,7 +144,6 @@ export default function RegisterPage() {
               <label htmlFor="phone" className="form-label fw-semibold">رقم واتساب</label>
               <input
                 id="phone"
-                name="mobile"
                 type="tel"
                 {...register('phone')}
                 className={`form-control${errors.phone ? ' is-invalid' : ''}`}
@@ -191,7 +190,7 @@ export default function RegisterPage() {
 
           <div className="text-center mt-3">
             <span className="text-secondary small">بالفعل لديك حساب؟ </span>
-            <Link href="/auth/login" className="text-primary fw-bold small text-decoration-none">
+            <Link href="/login" className="text-primary fw-bold small text-decoration-none">
               تسجيل الدخول
             </Link>
           </div>
