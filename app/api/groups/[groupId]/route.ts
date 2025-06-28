@@ -58,29 +58,46 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Get group members
+    console.log('🔍 Fetching members for group:', groupId);
+    
     const members = await GroupMember.find({ group: groupId })
       .populate('user', 'name avatar')
       .lean();
 
-    const membersList = members
-      .filter(member => member.user)
-      .sort((a, b) => (a.role === 'admin' ? -1 : 1))
-      .map((member: any) => ({
-        id: member.user._id.toString(),
-        name: member.user.name || 'مستخدم غير معروف',
-        avatar: member.user.avatar || null,
-        role: member.role || 'member',
-        joinedAt: member.joinedAt,
-      }));
+    console.log('🔍 Raw members from DB:', members);
+    console.log('🔍 Members count:', members.length);
 
-    return NextResponse.json({
+    // Check if members have user data
+    const validMembers = members.filter(member => member.user);
+    console.log('🔍 Valid members with user data:', validMembers.length);
+
+    const membersList = validMembers
+      .sort((a, b) => (a.role === 'admin' ? -1 : 1))
+      .map((member: any) => {
+        const memberData = {
+          id: member.user._id.toString(),
+          _id: member.user._id.toString(), // Keep both for compatibility
+          name: member.user.name || 'مستخدم غير معروف',
+          avatar: member.user.avatar || null,
+          role: member.role || 'member',
+          joinedAt: member.joinedAt,
+        };
+        console.log('🔍 Processing member:', memberData);
+        return memberData;
+      });
+
+    console.log('✅ Final processed members list:', membersList);
+
+    const responseData = {
       success: true,
       group: {
         id: (group._id as any).toString(),
+        _id: (group._id as any).toString(), // Keep both for compatibility
         name: group.name,
         description: group.description,
         coverImageUrl: group.coverImageUrl || null,
         adminId: group.admin.toString(),
+        admin: group.admin.toString(), // Keep both for compatibility
         memberCount: group.memberCount,
         createdAt: group.createdAt,
         currentUserRole,
@@ -90,7 +107,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         members: membersList,
       },
       currentUserId: userId ? userId.toString() : null,
-    }, { status: 200 });
+    };
+
+    console.log('📤 API Response data:', responseData);
+
+    return NextResponse.json(responseData, { status: 200 });
 
   } catch (error: any) {
     console.error('Error fetching group details:', error);

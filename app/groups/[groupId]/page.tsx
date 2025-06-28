@@ -74,7 +74,9 @@ export default function GroupPage() {
         
         console.log('✅ Group data fetched:', {
           groupName: groupData.name,
-          memberCount: groupData.members?.length || 0,
+          memberCount: groupData.memberCount,
+          membersLength: groupData.members?.length || 0,
+          members: groupData.members,
           currentUserId,
           isAdmin: groupData.admin === currentUserId
         });
@@ -334,8 +336,10 @@ export default function GroupPage() {
         // Group chat view
         <GroupChat 
           groupId={groupId}
-          groupName={group.name}
+          userId={userId}
+          members={members}
           initialMessages={initialMessages}
+          groupName={group.name}
           isAdmin={isAdmin}
         />
       )}

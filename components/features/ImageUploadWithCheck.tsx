@@ -166,10 +166,11 @@ export default function ImageUploadWithCheck({
           </div>
 
           <div
-            className="upload-area"
+            className="upload-area border-2 border-dashed border-secondary rounded p-4 text-center"
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onClick={() => document.getElementById('file-input')?.click()}
+            style={{cursor: 'pointer', minHeight: '150px'}}
           >
             <input
               id="file-input"
@@ -194,7 +195,7 @@ export default function ImageUploadWithCheck({
                     src={previewUrl} 
                     alt="Preview" 
                     className="img-thumbnail mb-2"
-                    style={{ maxHeight: '200px' }}
+                    style={{ maxHeight: '200px', maxWidth: '100%' }}
                   />
                 )}
                 <p className="mb-1"><strong>{file.name}</strong></p>
@@ -206,11 +207,11 @@ export default function ImageUploadWithCheck({
           </div>
 
           {file && (
-            <div className="mt-3">
+            <div className="mt-3 d-flex flex-wrap gap-2">
               <button
                 onClick={handleCheckAndUpload}
                 disabled={isProcessing}
-                className="btn btn-primary me-2"
+                className="btn btn-primary"
               >
                 {isProcessing ? (
                   <>
@@ -243,8 +244,21 @@ export default function ImageUploadWithCheck({
                 status.includes('⚠️') ? 'alert-warning' :
                 status.includes('❌') ? 'alert-danger' :
                 'alert-info'
-              }`}>
-                <small>{status}</small>
+              } d-flex align-items-center`}>
+                <div className="me-2">
+                  {status.includes('✅') && <i className="bi bi-check-circle-fill text-success"></i>}
+                  {status.includes('⚠️') && <i className="bi bi-exclamation-triangle-fill text-warning"></i>}
+                  {status.includes('❌') && <i className="bi bi-x-circle-fill text-danger"></i>}
+                  {!status.includes('✅') && !status.includes('⚠️') && !status.includes('❌') && <i className="bi bi-info-circle-fill text-info"></i>}
+                </div>
+                <div className="flex-grow-1">
+                  <small className="d-block">{status}</small>
+                  {status.includes('⚠️') && (
+                    <small className="d-block text-muted mt-1">
+                      الصورة تحتوي على محتوى غير مناسب. يرجى اختيار صورة أخرى.
+                    </small>
+                  )}
+                </div>
               </div>
             </div>
           )}

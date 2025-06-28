@@ -10,10 +10,7 @@ import GroupMember from '@/models/GroupMember'; // نحتاجه لفلترة ا�
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is not set.');
-}
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
 // دالة مساعدة لاستخراج معرف المستخدم وصلاحيات السوبر أدمن من التوكن
 const getAuthDetailsFromToken = (token: string) => {
@@ -179,5 +176,69 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error('Error fetching groups:', error);
     return NextResponse.json({ error: 'فشل في جلب المجموعات.' }, { status: 500 });
+  }
+}
+
+// GET method to fetch all groups
+export async function GET(request: NextRequest) {
+  await connectDB();
+
+  try {
+    // Get user ID from token
+    const authHeader = request.headers.get('Authorization');
+    let userId: mongoose.Types.ObjectId | null = null;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      userId = getAuthDetailsFromToken(token).userId;
+    }
+
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'غير مصرح لك. الرجاء تسجيل الدخول.' }, { status: 401 });
+    }
+
+    // Debug: Check all groups and members
+    console.log('🔍 Debug: Checking all groups and members...');
+    
+    const allGroups = await Group.find().lean();
+    console.log('🔍 All groups:', allGroups.length);
+    
+    const allGroupMembers = await GroupMember.find().populate('user', 'name avatar').lean();
+    console.log('🔍 All group members:', allGroupMembers.length);
+    
+    const allUsers = await User.find().lean();
+    console.log('🔍 All users:', allUsers.length);
+
+    // Get user's groups
+    const userGroups = await GroupMember.find({ user: userId })
+      .populate('group', 'name description memberCount')
+      .lean();
+
+    const groups = userGroups.map((userGroup: any) => ({
+      id: userGroup.group._id.toString(),
+      name: userGroup.group.name,
+      description: userGroup.group.description,
+      memberCount: userGroup.group.memberCount,
+      role: userGroup.role,
+      joinedAt: userGroup.joinedAt,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      groups,
+      debug: {
+        totalGroups: allGroups.length,
+        totalGroupMembers: allGroupMembers.length,
+        totalUsers: allUsers.length,
+        userGroups: userGroups.length
+      }
+    }, { status: 200 });
+
+  } catch (error: any) {
+    console.error('Error fetching groups:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message || 'خطأ داخلي في الخادم.' 
+    }, { status: 500 });
   }
 }

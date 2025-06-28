@@ -1,92 +1,480 @@
-// تحسين تصميم صفحة الدردشة بشكل كامل
+// Modern Responsive Chat Design with Advanced Features
 import React, { useState, useEffect, useRef } from 'react';
-import { FaSearch, FaEllipsisV, FaImage, FaVideo, FaFileAlt, FaMicrophone, FaRegSmile, FaPaperPlane, FaTimes, FaEdit, FaTrash } from 'react-icons/fa';
-import data from '@emoji-mart/data';
-import { Picker } from 'emoji-mart';
+import { 
+  FaSearch, FaEllipsisV, FaImage, FaVideo, FaFileAlt, FaMicrophone, 
+  FaRegSmile, FaPaperPlane, FaTimes, FaEdit, FaTrash, FaPhone, 
+  FaVideo as FaVideoCall, FaUsers, FaCog, FaHeart, FaThumbsUp, 
+  FaComment, FaUser, FaEnvelope, FaReply, FaShare, FaBookmark,
+  FaEye, FaEyeSlash, FaVolumeUp, FaVolumeMute, FaBell, FaBellSlash,
+  FaCrown, FaShieldAlt, FaUserPlus, FaUserMinus, FaBan, FaGavel
+} from 'react-icons/fa';
+import dynamic from 'next/dynamic';
 import DOMPurify from 'dompurify';
 import io from 'socket.io-client';
 import Image from 'next/image';
+
+// Dynamic import for emoji picker to avoid SSR issues
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
 interface GroupChatProps {
   groupId: string;
   userId: string;
   members: any[];
   initialMessages?: any[];
-  groupName?: string; // إضافة اسم المجموعة كخاصية
-  isAdmin?: boolean; // إضافة معلومة الأدمن
+  groupName?: string;
+  isAdmin?: boolean;
 }
 
-// MembersList component for both sidebar and offcanvas
+interface Reaction {
+  emoji: string;
+  users: string[];
+  count: number;
+}
+
+interface Comment {
+  id: string;
+  messageId: string;
+  content: string;
+  senderId: string;
+  senderName: string;
+  timestamp: Date;
+}
+
+interface Message {
+  id: string;
+  content: string;
+  type: 'text' | 'image' | 'video' | 'file' | 'system';
+  senderId: string;
+  senderName: string;
+  timestamp: Date;
+  reactions?: Reaction[];
+  comments?: Comment[];
+  replyTo?: any;
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  isPinned?: boolean;
+  isPrivate?: boolean;
+}
+
+// Modern MembersList with enhanced features
 const MembersList: React.FC<{
   members: any[];
   onlineUsers: Set<string>;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-}> = ({ members, onlineUsers, searchQuery, setSearchQuery }) => (
-  <>
-    <div className="p-3 border-bottom">
-      <h5 className="fw-bold mb-3 text-center">الأعضاء</h5>
-      <div className="position-relative mb-3">
-        <input
-          type="text"
-          className="form-control bg-light border-0 rounded-pill"
-          placeholder="بحث..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <FaSearch className="position-absolute top-50 translate-middle-y end-0 me-3 text-muted" />
-      </div>
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <small className="text-muted">متصل: {onlineUsers.size}</small>
-        <small className="text-muted">الكل: {members.length}</small>
-      </div>
+  onUserClick: (user: any) => void;
+  currentUserId: string;
+  isAdmin: boolean;
+}> = ({ members, onlineUsers, searchQuery, setSearchQuery, onUserClick, currentUserId, isAdmin }) => (
+  <div className="card border-0 h-100 bg-gradient-light">
+    <div className="card-header bg-white border-bottom d-flex align-items-center justify-content-between">
+      <span className="fw-bold text-primary">
+        <FaUsers className="me-2" />
+        أعضاء المجموعة
+      </span>
+      <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill">
+        {members.length} عضو
+      </span>
     </div>
-    <div className="p-2">
-      {members
-        .filter(member => member.name.includes(searchQuery))
-        .map((member) => (
-          <div
-            key={member.id || member._id}
-            className="d-flex align-items-center p-2 rounded-3 mb-2 hover-bg-light"
-            dir="rtl"
-          >
-            <div className="position-relative me-2">
-              {member.avatar ? (
-                <img
-                  src={member.avatar}
-                  alt={member.name}
-                  className="rounded-circle"
-                  width="40"
-                  height="40"
-                  style={{ objectFit: 'cover' }}
-                />
-              ) : (
-                <div
-                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-                  style={{
-                    width: 40,
-                    height: 40,
-                    background: 'linear-gradient(135deg, #3b82f6, #1e40af)'
-                  }}
-                >
-                  {member.name.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <span
-                className={`position-absolute bottom-0 start-0 rounded-circle border border-white ${onlineUsers.has(member.id || member._id) ? 'bg-success' : 'bg-secondary'}`}
-                style={{ width: 10, height: 10 }}
-              ></span>
-            </div>
-            <div className="ms-2 flex-grow-1">
-              <div className="fw-medium">{member.name}</div>
-              <small className="text-muted">
-                {onlineUsers.has(member.id || member._id) ? 'متصل الآن' : 'غير متصل'}
-              </small>
-            </div>
+    <div className="card-body p-0">
+      <div className="p-3 border-bottom">
+        <div className="input-group">
+          <span className="input-group-text bg-light border-0">
+            <FaSearch className="text-muted" />
+          </span>
+          <input
+            type="text"
+            className="form-control border-0 bg-light"
+            placeholder="البحث في الأعضاء..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+      </div>
+      <div className="overflow-auto" style={{maxHeight: 'calc(100vh - 200px)'}}>
+        {members.length === 0 ? (
+          <div className="text-center text-muted py-5">
+            <FaUsers size={48} className="mb-3 opacity-50" />
+            <p>لا يوجد أعضاء في المجموعة</p>
           </div>
-        ))}
+        ) : (
+          <div className="list-group list-group-flush">
+            {members
+              .filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()))
+              .sort((a, b) => {
+                // Sort by role (admin first), then online status, then name
+                if (a.role === 'admin' && b.role !== 'admin') return -1;
+                if (a.role !== 'admin' && b.role === 'admin') return 1;
+                const aOnline = onlineUsers.has(a.id);
+                const bOnline = onlineUsers.has(b.id);
+                if (aOnline && !bOnline) return -1;
+                if (!aOnline && bOnline) return 1;
+                return a.name.localeCompare(b.name);
+              })
+              .map(member => (
+                <div 
+                  key={member.id} 
+                  className="list-group-item list-group-item-action border-0 px-3 py-2 d-flex align-items-center"
+                  onClick={() => onUserClick(member)}
+                  style={{cursor: 'pointer'}}
+                >
+                  <div className="position-relative me-3">
+                    {member.avatar ? (
+                      <img 
+                        src={member.avatar} 
+                        alt={member.name} 
+                        className="rounded-circle border-2" 
+                        width={45} 
+                        height={45} 
+                        style={{
+                          objectFit: 'cover',
+                          borderColor: onlineUsers.has(member.id) ? '#28a745' : '#dee2e6'
+                        }}
+                      />
+                    ) : (
+                      <div 
+                        className="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white border-2"
+                        style={{
+                          width: 45,
+                          height: 45,
+                          background: member.role === 'admin' 
+                            ? 'linear-gradient(135deg, #ff6b6b, #ee5a24)' 
+                            : 'linear-gradient(135deg, #667eea, #764ba2)',
+                          borderColor: onlineUsers.has(member.id) ? '#28a745' : '#dee2e6'
+                        }}
+                      >
+                        {member.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span 
+                      className={`position-absolute bottom-0 start-0 translate-middle p-1 border border-white rounded-circle ${
+                        onlineUsers.has(member.id) ? 'bg-success' : 'bg-secondary'
+                      }`} 
+                      style={{width: 12, height: 12}}
+                    />
+                  </div>
+                  <div className="flex-grow-1">
+                    <div className="d-flex align-items-center">
+                      <span className="fw-semibold text-dark me-2">{member.name}</span>
+                      {member.role === 'admin' && (
+                        <FaCrown className="text-warning" size={12} title="مدير المجموعة" />
+                      )}
+                      {member.id === currentUserId && (
+                        <span className="badge bg-primary bg-opacity-10 text-primary rounded-pill ms-1">أنت</span>
+                      )}
+                    </div>
+                    <div className="d-flex align-items-center">
+                      <small className={`me-2 ${onlineUsers.has(member.id) ? 'text-success' : 'text-muted'}`}>
+                        {onlineUsers.has(member.id) ? '🟢 متصل' : '⚫ غير متصل'}
+                      </small>
+                      {member.role && (
+                        <small className="text-muted">
+                          {member.role === 'admin' ? 'مدير' : 'عضو'}
+                        </small>
+                      )}
+                    </div>
+                  </div>
+                  <div className="dropdown">
+                    <button 
+                      className="btn btn-sm btn-light rounded-circle p-1"
+                      data-bs-toggle="dropdown"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <FaEllipsisV size={10} />
+                    </button>
+                    <ul className="dropdown-menu dropdown-menu-end">
+                      <li>
+                        <button className="dropdown-item" onClick={() => onUserClick(member)}>
+                          <FaUser className="me-2" />عرض الملف الشخصي
+                        </button>
+                      </li>
+                      <li>
+                        <button className="dropdown-item">
+                          <FaEnvelope className="me-2" />رسالة خاصة
+                        </button>
+                      </li>
+                      {isAdmin && member.id !== currentUserId && (
+                        <>
+                          <li><hr className="dropdown-divider" /></li>
+                          <li>
+                            <button className="dropdown-item text-warning">
+                              <FaCrown className="me-2" />ترقية لمدير
+                            </button>
+                          </li>
+                          <li>
+                            <button className="dropdown-item text-danger">
+                              <FaBan className="me-2" />طرد من المجموعة
+                            </button>
+                          </li>
+                        </>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
     </div>
-  </>
+  </div>
+);
+
+// Modern Message Bubble Component
+const MessageBubble: React.FC<{
+  message: Message;
+  isOwnMessage: boolean;
+  onReaction: (messageId: string, emoji: string) => void;
+  onComment: (messageId: string) => void;
+  onReply: (message: Message) => void;
+  onPin: (messageId: string) => void;
+  onShare: (message: Message) => void;
+  onBookmark: (messageId: string) => void;
+  onEdit: (messageId: string, content: string) => void;
+  onDelete: (messageId: string) => void;
+  showReactionPicker: string | null;
+  setShowReactionPicker: (messageId: string | null) => void;
+  showComments: string | null;
+  setShowComments: (messageId: string | null) => void;
+  commentInput: string;
+  setCommentInput: (input: string) => void;
+  onCommentSubmit: (messageId: string) => void;
+  isAdmin: boolean;
+  setPreviewImage: (url: string | null) => void;
+  messageSearchQuery: string;
+}> = ({
+  message,
+  isOwnMessage,
+  onReaction,
+  onComment,
+  onReply,
+  onPin,
+  onShare,
+  onBookmark,
+  onEdit,
+  onDelete,
+  showReactionPicker,
+  setShowReactionPicker,
+  showComments,
+  setShowComments,
+  commentInput,
+  setCommentInput,
+  onCommentSubmit,
+  isAdmin,
+  setPreviewImage,
+  messageSearchQuery
+}) => (
+  <div className={`message-bubble-container ${isOwnMessage ? 'own-message' : 'other-message'}`} data-message-id={message.id}>
+    <div className={`message-bubble ${isOwnMessage ? 'sent' : 'received'} position-relative`}>
+      {/* Message Header */}
+      <div className="message-header d-flex align-items-center justify-content-between mb-2">
+        <div className="d-flex align-items-center">
+          {!isOwnMessage && (
+            <span className="fw-semibold text-primary me-2">{message.senderName}</span>
+          )}
+          {message.isPinned && (
+            <FaBookmark className="text-warning me-1" size={12} title="رسالة مثبتة" />
+          )}
+          {message.isEdited && (
+            <small className="text-muted">(تم التعديل)</small>
+          )}
+        </div>
+        <div className="message-actions d-flex gap-1">
+          <button 
+            className="btn btn-sm btn-light rounded-circle p-1"
+            onClick={() => setShowReactionPicker(showReactionPicker === message.id ? null : message.id)}
+            title="إضافة رد فعل"
+          >
+            <FaHeart size={12} />
+          </button>
+          <button 
+            className="btn btn-sm btn-light rounded-circle p-1"
+            onClick={() => onReply(message)}
+            title="رد"
+          >
+            <FaReply size={12} />
+          </button>
+          <div className="dropdown">
+            <button 
+              className="btn btn-sm btn-light rounded-circle p-1"
+              data-bs-toggle="dropdown"
+              title="المزيد"
+            >
+              <FaEllipsisV size={12} />
+            </button>
+            <ul className="dropdown-menu dropdown-menu-end">
+              <li>
+                <button className="dropdown-item" onClick={() => onComment(message.id)}>
+                  <FaComment className="me-2" />تعليق
+                </button>
+              </li>
+              <li>
+                <button className="dropdown-item" onClick={() => onShare(message)}>
+                  <FaShare className="me-2" />مشاركة
+                </button>
+              </li>
+              <li>
+                <button className="dropdown-item" onClick={() => onBookmark(message.id)}>
+                  <FaBookmark className="me-2" />حفظ
+                </button>
+              </li>
+              {isAdmin && (
+                <li>
+                  <button className="dropdown-item" onClick={() => onPin(message.id)}>
+                    <FaBookmark className="me-2" />تثبيت
+                  </button>
+                </li>
+              )}
+              {isOwnMessage && (
+                <>
+                  <li><hr className="dropdown-divider" /></li>
+                  <li>
+                    <button className="dropdown-item" onClick={() => onEdit(message.id, message.content)}>
+                      <FaEdit className="me-2" />تعديل
+                    </button>
+                  </li>
+                  <li>
+                    <button className="dropdown-item text-danger" onClick={() => onDelete(message.id)}>
+                      <FaTrash className="me-2" />حذف
+                    </button>
+                  </li>
+                </>
+              )}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Message Content */}
+      <div className="message-content">
+        {message.type === 'text' && (
+          <div 
+            dangerouslySetInnerHTML={{ 
+              __html: messageSearchQuery 
+                ? DOMPurify.sanitize(
+                    message.content.replace(
+                      new RegExp(`(${messageSearchQuery})`, 'gi'),
+                      '<mark class="bg-warning">$1</mark>'
+                    )
+                  )
+                : DOMPurify.sanitize(message.content) 
+            }} 
+          />
+        )}
+        {message.type === 'image' && (
+          <img 
+            src={message.content} 
+            alt="صورة" 
+            className="img-fluid rounded my-2" 
+            style={{maxHeight: 200, cursor: 'pointer'}} 
+            onClick={() => setPreviewImage(message.content)} 
+          />
+        )}
+        {message.type === 'video' && (
+          <video 
+            src={message.content} 
+            controls 
+            className="img-fluid rounded my-2" 
+            style={{maxHeight: 200}} 
+          />
+        )}
+        {message.type === 'file' && (
+          <a 
+            href={message.content} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="btn btn-outline-primary btn-sm mt-2"
+          >
+            <FaFileAlt className="me-1" />تحميل الملف
+          </a>
+        )}
+      </div>
+
+      {/* Reactions */}
+      {message.reactions && message.reactions.length > 0 && (
+        <div className="message-reactions mt-2">
+          {message.reactions.map((reaction, index) => (
+            <button
+              key={index}
+              className="btn btn-sm btn-light rounded-pill me-1"
+              onClick={() => onReaction(message.id, reaction.emoji)}
+              title={`${reaction.count} ${reaction.emoji}`}
+            >
+              <span className="me-1">{reaction.emoji}</span>
+              <span className="badge bg-secondary rounded-pill">{reaction.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Reaction Picker */}
+      {showReactionPicker === message.id && (
+        <div className="reaction-picker position-absolute bottom-100 start-0 mb-2 bg-white border rounded shadow-lg p-2">
+          <div className="d-flex gap-1">
+            {['👍', '❤️', '😂', '😮', '😢', '😡'].map(emoji => (
+              <button
+                key={emoji}
+                className="btn btn-sm btn-light rounded-circle"
+                onClick={() => onReaction(message.id, emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Comments */}
+      {showComments === message.id && (
+        <div className="message-comments mt-3 border-top pt-3">
+          <div className="comments-list mb-2">
+            {message.comments && message.comments.map(comment => (
+              <div key={comment.id} className="comment-item d-flex align-items-start mb-2">
+                <div className="comment-avatar me-2">
+                  <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style={{width: 24, height: 24}}>
+                    {comment.senderName.charAt(0).toUpperCase()}
+                  </div>
+                </div>
+                <div className="comment-content flex-grow-1">
+                  <div className="fw-semibold small">{comment.senderName}</div>
+                  <div className="small">{comment.content}</div>
+                  <small className="text-muted">
+                    {new Date(comment.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                  </small>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="comment-input d-flex gap-2">
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              placeholder="اكتب تعليق..."
+              value={commentInput}
+              onChange={(e) => setCommentInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && onCommentSubmit(message.id)}
+            />
+            <button 
+              className="btn btn-primary btn-sm"
+              onClick={() => onCommentSubmit(message.id)}
+              disabled={!commentInput.trim()}
+            >
+              إرسال
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Message Footer */}
+      <div className="message-footer d-flex justify-content-between align-items-center mt-2">
+        <small className="text-muted">
+          {new Date(message.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+        </small>
+        {isOwnMessage && (
+          <small className="text-muted">✓</small>
+        )}
+      </div>
+    </div>
+  </div>
 );
 
 const GroupChat: React.FC<GroupChatProps> = ({
@@ -94,13 +482,21 @@ const GroupChat: React.FC<GroupChatProps> = ({
   userId,
   members = [],
   initialMessages = [],
-  groupName = "المجموعة", // إضافة اسم المجموعة كخاصية
-  isAdmin = false // إضافة معلومة الأدمن
+  groupName = "المجموعة",
+  isAdmin = false
 }) => {
+  // Debug logging
+  console.log('🔍 GroupChat Props:', {
+    groupId,
+    userId,
+    membersCount: members?.length || 0,
+    members: members,
+    groupName,
+    isAdmin
+  });
+
   // State variables
   const [messages, setMessages] = useState(initialMessages || []);
-
-
   const [messageInput, setMessageInput] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState<any>(null);
@@ -109,32 +505,84 @@ const GroupChat: React.FC<GroupChatProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [replyToMsg, setReplyToMsg] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState('chat');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [showSidebar, setShowSidebar] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingMessage, setEditingMessage] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [messageDropdowns, setMessageDropdowns] = useState<{[key: string]: boolean}>({});
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  // New state variables for modern features
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [showUserProfile, setShowUserProfile] = useState(false);
+  const [showReactions, setShowReactions] = useState<string | null>(null);
+  const [showComments, setShowComments] = useState<string | null>(null);
+  const [commentInput, setCommentInput] = useState('');
+  const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
+  const [mutedUsers, setMutedUsers] = useState<Set<string>>(new Set());
+  const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
+  const [showPinnedMessages, setShowPinnedMessages] = useState(false);
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [selectedReaction, setSelectedReaction] = useState<string>('');
+  const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  // Filtered messages based on active tab - fix for undefined messages
-  const filteredMessages = (messages || []).filter(msg => {
-    if (activeTab === 'chat') return true;
-    if (activeTab === 'images') return msg.type === 'image';
-    if (activeTab === 'videos') return msg.type === 'video';
-    if (activeTab === 'files') return msg.type === 'file' || msg.type === 'pdf';
-    return true;
-  });
+  const offcanvasRef = useRef<HTMLDivElement>(null);
+  const commentInputRef = useRef<HTMLInputElement>(null);
+  const messageSearchRef = useRef<HTMLInputElement>(null);
+
+  // Normalize members data to handle different structures
+  const normalizedMembers = React.useMemo(() => {
+    if (!members || !Array.isArray(members)) {
+      console.warn('⚠️ Members prop is not an array:', members);
+      return [];
+    }
+    
+    return members.map(member => ({
+      id: member.id || member._id || member.userId,
+      name: member.name || member.userName || 'مستخدم غير معروف',
+      avatar: member.avatar || member.profileImage || null,
+      role: member.role || 'member',
+      joinedAt: member.joinedAt || member.createdAt || new Date(),
+    })).filter(member => member.id && member.name);
+  }, [members]);
+
+  console.log('✅ Normalized members:', normalizedMembers);
+
+  // Enhanced filtered messages with modern features
+  const filteredMessages = React.useMemo(() => {
+    let filtered = (messages || []).filter(msg => {
+      // Filter out messages from blocked users
+      if (blockedUsers.has(msg.senderId)) return false;
+      
+      // Filter by search query if active
+      if (messageSearchQuery && !msg.content.toLowerCase().includes(messageSearchQuery.toLowerCase())) {
+        return false;
+      }
+      
+      return true;
+    });
+
+    // Sort by timestamp (newest first)
+    return filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [messages, blockedUsers, messageSearchQuery]);
+
+  // Debug logging for members changes
+  useEffect(() => {
+    console.log('🔄 Members prop changed:', {
+      membersCount: members?.length || 0,
+      members: members,
+      normalizedCount: normalizedMembers.length,
+      normalized: normalizedMembers
+    });
+  }, [members, normalizedMembers]);
 
   // Socket connection and event handlers
   useEffect(() => {
-    // Socket connection logic
     const socketInitializer = async () => {
       try {
         const token = localStorage.getItem('token');
@@ -143,7 +591,6 @@ const GroupChat: React.FC<GroupChatProps> = ({
           return;
         }
 
-        // Prevent multiple connections
         if (socket && socket.connected) {
           console.log('🔗 Socket already connected, skipping initialization');
           return;
@@ -151,64 +598,35 @@ const GroupChat: React.FC<GroupChatProps> = ({
 
         console.log('🔌 Initializing socket connection...');
 
-        const socketInstance = io(
-          {
-            transports: ['websocket'], // Force WebSocket only
-            timeout: 45000,
-            forceNew: false, // Changed to false to prevent multiple connections
-            reconnection: true,
-            reconnectionAttempts: 3, // Reduced from 5
-            reconnectionDelay: 2000, // Increased from 1000
-            reconnectionDelayMax: 10000, // Increased from 5000
-            query: { token, groupId }
-          }
-        );
+        const socketInstance = io({
+          transports: ['websocket'],
+          timeout: 45000,
+          forceNew: false,
+          reconnection: true,
+          reconnectionAttempts: 3,
+          reconnectionDelay: 2000,
+          reconnectionDelayMax: 10000,
+          query: { token, groupId }
+        });
 
-        // Connection event handlers
         socketInstance.on('connect', () => {
-          console.log('🔗 Connected to socket server', {
-            id: socketInstance.id,
-            isMobile: window.innerWidth <= 768,
-            userAgent: navigator.userAgent.substring(0, 50),
-            serverUrl: '/api/socket'
-          });
+          console.log('🔗 Connected to socket server');
           setIsConnected(true);
-          
-          // Join the group room only after successful connection
-          console.log('🤝 Joining group room:', groupId);
           socketInstance.emit('joinGroup', groupId, token);
         });
 
         socketInstance.on('connect_error', (error) => {
           console.error('🔴 Socket connection error:', error);
           setIsConnected(false);
-          
-          // Don't show alert immediately, let reconnection handle it
-          if (error.message.includes('authentication')) {
-            console.error('🔑 Authentication error in socket connection');
-            // Handle auth error gracefully
-          }
         });
 
         socketInstance.on('disconnect', (reason) => {
           console.log('🔌 Disconnected from socket server:', reason);
           setIsConnected(false);
-          
-          // Only attempt reconnection for certain reasons
-          if (reason === 'io server disconnect') {
-            console.log('🔄 Server disconnected, attempting reconnection...');
-            // Let the socket handle reconnection automatically
-          } else if (reason === 'io client disconnect') {
-            console.log('👤 Client disconnected intentionally');
-          }
         });
 
-        // Group join event handlers
         socketInstance.on('joinedGroup', (data) => {
           console.log('✅ Successfully joined group:', data.groupId);
-          console.log('📨 Received initial messages:', data.messages?.length || 0);
-          
-          // Set initial messages from socket
           if (data.messages && data.messages.length > 0) {
             setMessages(data.messages);
           }
@@ -217,23 +635,14 @@ const GroupChat: React.FC<GroupChatProps> = ({
         socketInstance.on('errorJoiningGroup', (error) => {
           console.error('❌ Error joining group via socket:', error);
           setIsConnected(false);
-          
-          // Handle specific errors
-          if (error.includes('غير مصرح')) {
-            console.log('🔒 User not authorized to join group');
-            // This should be handled by the page component
-          }
         });
 
-        // Message event handlers
         socketInstance.on('receiveMessage', (message) => {
           console.log('📨 Received new message:', message.id);
           setMessages(prev => {
             const prevMessages = prev || [];
-            // Check if message already exists
             const messageExists = prevMessages.some(msg => msg.id === message.id);
             if (messageExists) {
-              console.log('⚠️ Message already exists, skipping');
               return prevMessages;
             }
             return [...prevMessages, message];
@@ -253,31 +662,17 @@ const GroupChat: React.FC<GroupChatProps> = ({
           });
         });
 
-        // Error handlers
         socketInstance.on('messageError', (error) => {
           console.error('❌ Message error:', error);
-          // Show error in a more user-friendly way
-          if (typeof window !== 'undefined') {
-            // Use a toast or notification instead of alert
-            console.warn('Message error:', error);
-          }
         });
 
         socketInstance.on('authError', (error) => {
           console.error('🔑 Auth error:', error);
           setIsConnected(false);
-          
-          // Handle auth error gracefully
-          if (typeof window !== 'undefined') {
-            console.warn('Authentication error:', error);
-            // Redirect to login or show login prompt
-          }
         });
 
-        // Typing indicators
         socketInstance.on('userTyping', ({ userId, isTyping, groupId: typingGroupId }) => {
           if (typingGroupId === groupId) {
-            console.log('⌨️ User typing:', userId, isTyping);
             setTypingUsers(prev => {
               const newSet = new Set(prev);
               if (isTyping) {
@@ -290,9 +685,7 @@ const GroupChat: React.FC<GroupChatProps> = ({
           }
         });
 
-        // Message editing and deletion
         socketInstance.on('messageEdited', ({ messageId, newContent, isEdited }) => {
-          console.log('✏️ Message edited:', messageId);
           setMessages(prev => prev.map(msg =>
             msg.id === messageId
               ? { ...msg, content: newContent, isEdited: true }
@@ -301,7 +694,6 @@ const GroupChat: React.FC<GroupChatProps> = ({
         });
 
         socketInstance.on('messageDeleted', ({ messageId, deletedBy }) => {
-          console.log('🗑️ Message deleted:', messageId, 'by:', deletedBy);
           setMessages(prev => prev.map(msg =>
             msg.id === messageId
               ? { ...msg, content: `تم حذف هذه الرسالة بواسطة ${deletedBy}`, isDeleted: true, type: 'text' }
@@ -309,12 +701,59 @@ const GroupChat: React.FC<GroupChatProps> = ({
           ));
         });
 
-        // Set socket instance
+        // New socket event handlers for modern features
+        socketInstance.on('reactionAdded', ({ messageId, reaction, userId }) => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  reactions: [
+                    ...(msg.reactions || []),
+                    { emoji: reaction, users: [userId], count: 1 }
+                  ]
+                }
+              : msg
+          ));
+        });
+
+        socketInstance.on('commentAdded', ({ messageId, comment }) => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? {
+                  ...msg,
+                  comments: [...(msg.comments || []), comment]
+                }
+              : msg
+          ));
+        });
+
+        socketInstance.on('messagePinned', ({ messageId, pinnedBy }) => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, isPinned: true }
+              : msg
+          ));
+          setPinnedMessages(prev => {
+            const message = messages.find(m => m.id === messageId);
+            if (message && !prev.find(p => p.id === messageId)) {
+              return [...prev, { ...message, isPinned: true }];
+            }
+            return prev;
+          });
+        });
+
+        socketInstance.on('messageUnpinned', ({ messageId }) => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === messageId
+              ? { ...msg, isPinned: false }
+              : msg
+          ));
+          setPinnedMessages(prev => prev.filter(p => p.id !== messageId));
+        });
+
         setSocket(socketInstance);
 
-        // Cleanup function
         return () => {
-          console.log('🧹 Cleaning up socket connection');
           if (socketInstance && socketInstance.connected) {
             socketInstance.disconnect();
           }
@@ -324,108 +763,32 @@ const GroupChat: React.FC<GroupChatProps> = ({
       }
     };
 
-    // Only initialize if we have a groupId and userId
     if (groupId && userId) {
       socketInitializer();
     }
 
-    // Cleanup on unmount or when groupId/userId changes
     return () => {
       if (socket && socket.connected) {
-        console.log('🧹 Disconnecting socket on cleanup');
         socket.disconnect();
       }
     };
-  }, [groupId, userId]); // Only depend on groupId and userId
+  }, [groupId, userId]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
-        setShowEmoji(false);
-      }
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-      // Close message dropdowns when clicking outside
-      const target = event.target as Element;
-      if (!target.closest('.dropdown')) {
-        setMessageDropdowns({});
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
   // Handle sending message
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    const isMobile = window.innerWidth <= 768;
-    console.log('🚀 handleSendMessage called', {
-      messageInput: messageInput.substring(0, 20),
-      socket: !!socket,
-      isConnected,
-      isMobile,
-      userAgent: navigator.userAgent.substring(0, 50)
-    });
-
-    // Trim message and check if empty
     const trimmedMessage = messageInput.trim();
-    if (!trimmedMessage) {
-      console.log('❌ Message is empty');
+    if (!trimmedMessage) return;
 
-      // Visual feedback for mobile
-      if (isMobile) {
-        const textarea = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
-        if (textarea) {
-          textarea.style.borderColor = '#dc3545';
-          textarea.focus();
-          setTimeout(() => {
-            textarea.style.borderColor = '';
-          }, 1500);
-        }
-      }
+    if (!socket || !isConnected) {
+      alert('غير متصل بالسيرفر');
       return;
-    }
-
-    if (!socket) {
-      console.log('❌ Socket not connected');
-      if (isMobile) {
-        alert('غير متصل بالسيرفر - يرجى إعادة تحميل الصفحة');
-      } else {
-        alert('غير متصل بالسيرفر');
-      }
-      return;
-    }
-
-    if (!isConnected) {
-      console.log('❌ Not connected to server');
-      if (isMobile) {
-        alert('الاتصال غير مستقر - يرجى المحاولة مرة أخرى');
-      } else {
-        alert('الاتصال غير مستقر');
-      }
-      return;
-    }
-
-    console.log('✅ Sending message:', trimmedMessage.substring(0, 50));
-
-    // Visual feedback - disable button temporarily
-    const sendButton = document.querySelector('button[type="submit"]') as HTMLButtonElement;
-    if (sendButton) {
-      sendButton.disabled = true;
-      sendButton.style.opacity = '0.6';
-      if (isMobile) {
-        sendButton.innerHTML = '<div class="spinner-border spinner-border-sm" role="status"></div>';
-      }
     }
 
     try {
@@ -437,34 +800,12 @@ const GroupChat: React.FC<GroupChatProps> = ({
         replyTo: replyToMsg?.id || null,
       });
 
-      console.log('✅ Message emitted successfully');
       setMessageInput('');
       setReplyToMsg(null);
       if (isTyping) handleTyping(false);
-
-      // Re-enable button
-      setTimeout(() => {
-        if (sendButton) {
-          sendButton.disabled = false;
-          sendButton.style.opacity = '1';
-          if (isMobile) {
-            sendButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
-          }
-        }
-      }, 1000);
-
     } catch (error) {
       console.error('❌ Error sending message:', error);
       alert('حدث خطأ أثناء إرسال الرسالة');
-
-      // Re-enable button on error
-      if (sendButton) {
-        sendButton.disabled = false;
-        sendButton.style.opacity = '1';
-        if (isMobile) {
-          sendButton.innerHTML = '<i class="fas fa-paper-plane"></i>';
-        }
-      }
     }
   };
 
@@ -476,8 +817,9 @@ const GroupChat: React.FC<GroupChatProps> = ({
   };
 
   // Handle emoji selection
-  const handleEmojiSelect = (emoji: any) => {
-    setMessageInput(prev => prev + emoji.native);
+  const handleEmojiSelect = (emojiData: any) => {
+    setMessageInput(prev => prev + emojiData.emoji);
+    setShowEmoji(false);
   };
 
   // Handle message edit
@@ -533,36 +875,99 @@ const GroupChat: React.FC<GroupChatProps> = ({
     }));
   };
 
-  // Function to detect and format links in text
-  const formatTextWithLinks = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
+  // New handlers for modern features
+  const handleUserClick = (user: any) => {
+    setSelectedUser(user);
+    setShowUserProfile(true);
+    setShowSidebar(false); // Close sidebar on mobile
+  };
 
-    return parts.map((part, index) => {
-      if (urlRegex.test(part)) {
-        return (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-decoration-underline"
-            style={{ color: 'inherit' }}
-          >
-            {part}
-          </a>
-        );
+  const handleReaction = (messageId: string, emoji: string) => {
+    if (!socket || !isConnected) return;
+    
+    socket.emit('addReaction', {
+      messageId,
+      emoji,
+      groupId,
+      token: typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    });
+    setShowReactionPicker(null);
+  };
+
+  const handleComment = (messageId: string) => {
+    if (!commentInput.trim() || !socket || !isConnected) return;
+    
+    socket.emit('addComment', {
+      messageId,
+      content: commentInput.trim(),
+      groupId,
+      token: typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    });
+    setCommentInput('');
+    setShowComments(null);
+  };
+
+  const handlePinMessage = (messageId: string) => {
+    if (!socket || !isConnected) return;
+    
+    socket.emit('pinMessage', {
+      messageId,
+      groupId,
+      token: typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    });
+    setMessageDropdowns({});
+  };
+
+  const handlePrivateMessage = (userId: string) => {
+    // TODO: Implement private messaging
+    console.log('Private message to:', userId);
+    setShowUserProfile(false);
+  };
+
+  const handleMuteUser = (userId: string) => {
+    setMutedUsers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
       }
-      return part;
+      return newSet;
     });
   };
 
-  // Handle file upload with NSFW check
+  const handleBlockUser = (userId: string) => {
+    setBlockedUsers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleShareMessage = (message: Message) => {
+    // TODO: Implement message sharing
+    console.log('Share message:', message);
+  };
+
+  const handleBookmarkMessage = (messageId: string) => {
+    // TODO: Implement message bookmarking
+    console.log('Bookmark message:', messageId);
+  };
+
+  const handleMessageSearch = (query: string) => {
+    setMessageSearchQuery(query);
+    // TODO: Implement message search functionality
+  };
+
+  // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !socket) return;
 
-    // Check file type
     const isImage = file.type.startsWith('image/');
     const isVideo = file.type.startsWith('video/');
     const isPdf = file.type.endsWith('/pdf');
@@ -573,40 +978,18 @@ const GroupChat: React.FC<GroupChatProps> = ({
     else if (isPdf) type = 'pdf';
 
     try {
-      // NSFW check for images and videos
-      if (isImage) {
-        // Load NSFW.js model
-        const nsfwjs = await import('nsfwjs');
-        const model = await nsfwjs.load();
-        
-        // Create image element for checking
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(file);
-        await new Promise((resolve) => {
-          img.onload = resolve;
-        });
+      // Show loading message
+      const loadingMessage = `جاري رفع ${isImage ? 'الصورة' : isVideo ? 'الفيديو' : 'الملف'}...`;
+      console.log(loadingMessage);
 
-        // Check image
-        const predictions = await model.classify(img);
-        const unsafe = predictions.find(
-          (p) =>
-            (p.className === 'Porn' && p.probability > 0.5) ||
-            (p.className === 'Sexy' && p.probability > 0.5)
-        );
-
-        if (unsafe) {
-          alert('⚠️ الصورة تحتوي على محتوى غير لائق، تم رفضها.');
-          return;
-        }
-      } else if (isVideo) {
-        // Similar NSFW check for video
-        // ...
-      }
-
-      // If content is safe, proceed with upload
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload-media', { method: 'POST', body: formData });
+      
+      const res = await fetch('/api/upload-media', { 
+        method: 'POST', 
+        body: formData 
+      });
+      
       const data = await res.json();
       
       if (data.filepath) {
@@ -624,6 +1007,21 @@ const GroupChat: React.FC<GroupChatProps> = ({
         });
         
         setReplyToMsg(null);
+        console.log('✅ تم رفع الملف بنجاح');
+      } else if (data.error) {
+        // Handle specific error messages
+        const errorMessage = data.arabicError || data.error;
+        
+        if (errorMessage.includes('inappropriate') || errorMessage.includes('غير لائقة')) {
+          alert('⚠️ هذه الصورة غير لائقة، يرجى اختيار صورة أخرى');
+        } else if (errorMessage.includes('حجم الملف')) {
+          alert(`❌ ${errorMessage}`);
+        } else if (errorMessage.includes('نوع الملف')) {
+          alert(`❌ ${errorMessage}`);
+        } else {
+          alert(`❌ خطأ في رفع الملف: ${errorMessage}`);
+        }
+        console.error('Upload error:', data.error);
       }
     } catch (error) {
       console.error('Error processing file:', error);
@@ -631,748 +1029,173 @@ const GroupChat: React.FC<GroupChatProps> = ({
     }
   };
 
-  return (
-    <>
-      <style jsx>{`
-        @media (max-width: 768px) {
-          .nav-tabs .nav-link {
-            font-size: 0.875rem;
-            padding: 0.5rem 0.75rem;
-          }
+  // Toggle mobile sidebar manually if Bootstrap JS is not available
+  const toggleMobileSidebar = () => {
+    setShowSidebar(!showSidebar);
+  };
 
-          .chat-messages {
-            padding: 0.75rem !important;
-          }
+  // Close mobile sidebar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showSidebar && offcanvasRef.current && !offcanvasRef.current.contains(event.target as Node)) {
+        setShowSidebar(false);
+      }
+    };
 
-          .message-bubble {
-            max-width: 85% !important;
-          }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSidebar]);
 
-          .offcanvas {
-            width: 280px !important;
-          }
-        }
+  // Handle window resize for mobile emoji picker
+  useEffect(() => {
+    const handleResize = () => {
+      if (showEmoji && window.innerWidth < 768) {
+        // Force re-render of emoji picker on mobile
+        setShowEmoji(false);
+        setTimeout(() => setShowEmoji(true), 100);
+      }
+    };
 
-        .hover-bg-light:hover {
-          background-color: #f8f9fa !important;
-        }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [showEmoji]);
 
-        .nav-tabs .nav-link.active {
-          border-bottom: 2px solid #0d6efd !important;
-          background-color: transparent !important;
-        }
+  // Close mobile sidebar when screen size changes
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 768) {
+        setShowSidebar(false);
+      }
+    };
 
-        .dropdown-item:hover {
-          background-color: #f8f9fa !important;
-        }
-      `}</style>
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-    <div className="container-fluid p-0">
-      <div className="row g-0">
-        {/* Mobile Header */}
-        <div className="col-12 bg-white border-bottom p-3 d-md-none">
-          <div className="d-flex align-items-center justify-content-between">
-            <div className="d-flex align-items-center">
-              <button
-                className="btn btn-light me-2 d-md-none"
-                type="button"
-                data-bs-toggle="offcanvas"
-                data-bs-target="#membersOffcanvas"
-                aria-controls="membersOffcanvas"
-              >
-                <FaSearch size={16} />
-              </button>
-              <h6 className="mb-0 fw-bold">{groupName || "المجموعة"}</h6>
-            </div>
-            <div className="dropdown" ref={dropdownRef}>
-              <button
-                className="btn btn-light rounded-circle"
-                onClick={() => setShowDropdown(!showDropdown)}
-              >
-                <FaEllipsisV size={16} />
-              </button>
-              {showDropdown && (
-                <div
-                  className="dropdown-menu dropdown-menu-end show position-absolute shadow-sm border"
-                  style={{
-                    top: '100%',
-                    right: 0,
-                    minWidth: '160px',
-                    zIndex: 1000,
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    padding: '8px 0'
-                  }}
-                >
-                  <button
-                    className="dropdown-item d-flex align-items-center px-3 py-2"
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      fontSize: '14px',
-                      color: '#333'
-                    }}
-                    onClick={() => {
-                      setShowDropdown(false);
-                      console.log('تعديل المجموعة');
-                    }}
-                  >
-                    تعديل المجموعة
-                  </button>
-                  <button
-                    className="dropdown-item d-flex align-items-center px-3 py-2 text-danger"
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      fontSize: '14px'
-                    }}
-                    onClick={() => {
-                      setShowDropdown(false);
-                      if (confirm('هل أنت متأكد من حذف المجموعة؟')) {
-                        console.log('حذف المجموعة');
-                      }
-                    }}
-                  >
-                    حذف المجموعة
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
+  // ChatBubble (fixed, simple version)
+  const ChatBubble = ({ msg, isOwn }: { msg: any, isOwn: boolean }) => (
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-2`}>
+      <div className={`max-w-[70%] px-4 py-2 rounded-2xl shadow ${isOwn ? 'bg-blue-600 text-white rounded-br-md' : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-md'}`}>
+        <div className="flex items-center gap-2 mb-1">
+          {!isOwn && <span className="font-bold text-xs text-blue-600 dark:text-blue-300">{msg.senderName}</span>}
+          {msg.isEdited && <span className="text-xs text-gray-400">(تم التعديل)</span>}
         </div>
-
-        {/* Desktop Sidebar - Members */}
-        <div className="col-md-3 border-end bg-white d-none d-md-block" style={{ height: '100vh', overflowY: 'auto' }}>
-          <MembersList members={members} onlineUsers={onlineUsers} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
-        </div>
-        
-        {/* Mobile Offcanvas for Members */}
-        <div className="offcanvas offcanvas-start d-md-none" tabIndex={-1} id="membersOffcanvas" aria-labelledby="membersOffcanvasLabel">
-          <div className="offcanvas-header">
-            <h5 className="offcanvas-title fw-bold" id="membersOffcanvasLabel">الأعضاء</h5>
-            <button type="button" className="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-          </div>
-          <div className="offcanvas-body p-0">
-            <MembersList members={members} onlineUsers={onlineUsers} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
-          </div>
-        </div>
-
-        {/* Main Chat Area */}
-        <div className="col-12 col-md-9 d-flex flex-column" style={{ height: 'calc(100vh - 70px)' }}>
-          {/* Desktop Chat Header */}
-          <div className="p-3 border-bottom bg-white d-none d-md-block">
-            <div className="d-flex justify-content-between align-items-center">
-              <div className="d-flex align-items-center">
-                <div
-                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold me-2"
-                  style={{
-                    width: 45,
-                    height: 45,
-                    background: 'linear-gradient(135deg, #3b82f6, #1e40af)'
-                  }}
-                >
-                  {groupId.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h5 className="fw-bold mb-0">{groupName}</h5>
-                  <div className="d-flex align-items-center">
-                    <small className="text-muted">
-                      <span className="me-1 d-inline-block rounded-circle bg-success" style={{ width: 8, height: 8 }}></span>
-                      {onlineUsers.size} متصل • {members.length} عضو
-                    </small>
-                  </div>
-                </div>
-              </div>
-
-              <div className="d-flex">
-                <button className="btn btn-light rounded-circle me-2">
-                  <FaSearch size={16} />
-                </button>
-                <div className="dropdown" ref={dropdownRef}>
-                  <button
-                    className="btn btn-light rounded-circle"
-                    onClick={() => setShowDropdown(!showDropdown)}
-                  >
-                    <FaEllipsisV size={16} />
-                  </button>
-                  {showDropdown && (
-                    <div
-                      className="dropdown-menu dropdown-menu-end show position-absolute shadow-sm border"
-                      style={{
-                        top: '100%',
-                        right: 0,
-                        minWidth: '160px',
-                        zIndex: 1000,
-                        backgroundColor: 'white',
-                        borderRadius: '8px',
-                        padding: '8px 0'
-                      }}
-                    >
-                      <button
-                        className="dropdown-item d-flex align-items-center px-3 py-2"
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          fontSize: '14px',
-                          color: '#333'
-                        }}
-                        onClick={() => {
-                          setShowDropdown(false);
-                          // إضافة منطق تعديل المجموعة هنا
-                          console.log('تعديل المجموعة');
-                        }}
-                        onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#f8f9fa'}
-                        onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = 'transparent'}
-                      >
-                        <FaEdit className="me-2" size={14} />
-                        تعديل المجموعة
-                      </button>
-                      <button
-                        className="dropdown-item d-flex align-items-center px-3 py-2 text-danger"
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          fontSize: '14px'
-                        }}
-                        onClick={() => {
-                          setShowDropdown(false);
-                          // إضافة منطق حذف المجموعة هنا
-                          if (confirm('هل أنت متأكد من حذف المجموعة؟')) {
-                            console.log('حذف المجموعة');
-                          }
-                        }}
-                        onMouseEnter={(e) => (e.target as HTMLElement).style.backgroundColor = '#f8f9fa'}
-                        onMouseLeave={(e) => (e.target as HTMLElement).style.backgroundColor = 'transparent'}
-                      >
-                        <FaTrash className="me-2" size={14} />
-                        حذف المجموعة
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Tabs - Responsive */}
-          <div className="bg-white border-bottom">
-            <ul className="nav nav-tabs border-0 justify-content-center flex-nowrap overflow-auto">
-              <li className="nav-item">
-                <button
-                  className={`nav-link border-0 px-2 px-md-3 ${activeTab === 'chat' ? 'active fw-bold' : 'text-muted'}`}
-                  onClick={() => setActiveTab('chat')}
-                >
-                  <span className="d-none d-sm-inline">الدردشة</span>
-                  <span className="d-sm-none">💬</span>
-                </button>
-              </li>
-              <li className="nav-item">
-                <button
-                  className={`nav-link border-0 px-2 px-md-3 ${activeTab === 'images' ? 'active fw-bold' : 'text-muted'}`}
-                  onClick={() => setActiveTab('images')}
-                >
-                  <span className="d-none d-sm-inline">الصور</span>
-                  <span className="d-sm-none">🖼️</span>
-                </button>
-              </li>
-              <li className="nav-item">
-                <button
-                  className={`nav-link border-0 px-2 px-md-3 ${activeTab === 'videos' ? 'active fw-bold' : 'text-muted'}`}
-                  onClick={() => setActiveTab('videos')}
-                >
-                  <span className="d-none d-sm-inline">الفيديوهات</span>
-                  <span className="d-sm-none">🎥</span>
-                </button>
-              </li>
-              <li className="nav-item">
-                <button
-                  className={`nav-link border-0 px-2 px-md-3 ${activeTab === 'files' ? 'active fw-bold' : 'text-muted'}`}
-                  onClick={() => setActiveTab('files')}
-                >
-                  <span className="d-none d-sm-inline">الملفات</span>
-                  <span className="d-sm-none">📁</span>
-                </button>
-              </li>
-            </ul>
-          </div>
-          
-          {/* Messages */}
-          <div 
-            className="flex-grow-1 p-3 overflow-auto chat-messages" 
-            style={{ 
-              background: 'linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%)',
-              scrollBehavior: 'smooth',
-              direction: 'rtl',
-              textAlign: 'right'
-            }}
-          >
-            {filteredMessages && filteredMessages.length > 0 ? (
-              <div className="d-flex flex-column gap-3" dir="rtl">
-                {filteredMessages.map((msg, index) => (
-                  <div key={`${msg.id}-${index}`} className={`d-flex ${msg.senderId === userId ? 'justify-content-start' : 'justify-content-end'}`}>
-                    <div className={`d-flex ${msg.senderId === userId ? 'flex-row' : 'flex-row-reverse'}`} style={{ maxWidth: '75%' }}>
-                      {/* Avatar (only for received messages) */}
-                      {msg.senderId !== userId && (
-                        <div className="ms-2">
-                          {msg.senderAvatar ? (
-                            <img 
-                              src={msg.senderAvatar} 
-                              alt={msg.senderName} 
-                              className="rounded-circle border border-2 border-white" 
-                              width="40" 
-                              height="40"
-                              style={{ objectFit: 'cover' }}
-                            />
-                          ) : (
-                            <div 
-                              className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" 
-                              style={{ 
-                                width: 40, 
-                                height: 40, 
-                                background: 'linear-gradient(135deg, #3b82f6, #1e40af)' 
-                              }}
-                            >
-                              {msg.senderName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* Message Content */}
-                      <div className="d-flex flex-column">
-                        {/* Reply Preview */}
-                        {msg.replyTo && (
-                          <div 
-                            className={`small p-2 rounded bg-light mb-1 border-start border-3 border-primary ${msg.senderId === userId ? 'ms-2' : 'me-2'}`}
-                            style={{ borderRadius: '0.5rem' }}
-                          >
-                            <div className="fw-bold text-primary">
-                              {messages.find(m => m.id === msg.replyTo)?.senderName || 'رسالة محذوفة'}
-                            </div>
-                            <div className="text-truncate">
-                              {messages.find(m => m.id === msg.replyTo)?.content || 'محتوى الرسالة غير متاح'}
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div
-                          className={`position-relative p-3 shadow-sm ${
-                            msg.senderId === userId
-                              ? 'bg-primary text-white rounded-4 rounded-bottom-end-0'
-                              : 'bg-white text-dark rounded-4 rounded-bottom-start-0'
-                          } ${msg.isDeleted ? 'opacity-75' : ''}`}
-                        >
-                          {/* Message Options Dropdown */}
-                          {!msg.isDeleted && (msg.senderId === userId || isAdmin) && (
-                            <div className="position-absolute top-0 end-0 mt-2 me-2">
-                              <div className="dropdown">
-                                <button
-                                  className="btn btn-sm btn-outline-secondary rounded-circle"
-                                  style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    padding: '0',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    zIndex: 10,
-                                    backgroundColor: 'rgba(255,255,255,0.9)',
-                                    border: '1px solid #dee2e6'
-                                  }}
-                                  onClick={() => toggleMessageDropdown(msg.id)}
-                                  title="خيارات الرسالة"
-                                >
-                                  <FaEllipsisV size={12} />
-                                </button>
-                                {messageDropdowns[msg.id] && (
-                                  <div
-                                    className="dropdown-menu dropdown-menu-end show position-absolute shadow-sm border"
-                                    style={{
-                                      top: '100%',
-                                      right: 0,
-                                      minWidth: '140px',
-                                      zIndex: 1000,
-                                      backgroundColor: 'white',
-                                      borderRadius: '8px',
-                                      padding: '4px 0'
-                                    }}
-                                  >
-                                    {/* Edit option - only for message owner and text messages */}
-                                    {msg.senderId === userId && msg.type === 'text' && (
-                                      <button
-                                        className="dropdown-item d-flex align-items-center px-3 py-2"
-                                        style={{
-                                          border: 'none',
-                                          background: 'transparent',
-                                          fontSize: '13px',
-                                          color: '#333'
-                                        }}
-                                        onClick={() => handleEditMessage(msg.id, msg.content)}
-                                      >
-                                        <FaEdit className="me-2" size={12} />
-                                        تعديل
-                                      </button>
-                                    )}
-
-                                    {/* Delete option - for message owner or admin */}
-                                    <button
-                                      className="dropdown-item d-flex align-items-center px-3 py-2 text-danger"
-                                      style={{
-                                        border: 'none',
-                                        background: 'transparent',
-                                        fontSize: '13px'
-                                      }}
-                                      onClick={() => handleDeleteMessage(msg.id)}
-                                    >
-                                      <FaTrash className="me-2" size={12} />
-                                      حذف
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Sender Name (only for received messages) */}
-                          {msg.senderId !== userId && (
-                            <div className="small fw-bold mb-1 text-primary">{msg.senderName}</div>
-                          )}
-
-                          {/* Content based on type or edit mode */}
-                          {editingMessage === msg.id ? (
-                            <div className="d-flex flex-column gap-2">
-                              <textarea
-                                className="form-control"
-                                value={editContent}
-                                onChange={(e) => setEditContent(e.target.value)}
-                                rows={2}
-                                style={{ resize: 'none' }}
-                              />
-                              <div className="d-flex gap-2">
-                                <button
-                                  className="btn btn-sm btn-success"
-                                  onClick={handleSaveEdit}
-                                  disabled={!editContent.trim()}
-                                >
-                                  حفظ
-                                </button>
-                                <button
-                                  className="btn btn-sm btn-secondary"
-                                  onClick={handleCancelEdit}
-                                >
-                                  إلغاء
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              {msg.type === 'text' && (
-                                <div dir="rtl" style={{ textAlign: 'right' }} className="chat-message-content">
-                                  <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }} />
-                                  {msg.isEdited && (
-                                    <small className={`ms-2 ${msg.senderId === userId ? 'text-light' : 'text-muted'}`}>
-                                      (تم التعديل)
-                                    </small>
-                                  )}
-                                </div>
-                              )}
-                            </>
-                          )}
-                          {msg.type === 'image' && (
-                            <img 
-                              src={msg.content} 
-                              alt="صورة" 
-                              className="img-fluid rounded-3 cursor-pointer" 
-                              style={{ maxHeight: 240 }}
-                              onClick={() => setPreviewImage(msg.content)}
-                            />
-                          )}
-                          {msg.type === 'video' && (
-                            <video 
-                              src={msg.content} 
-                              controls 
-                              className="img-fluid rounded-3 w-100"
-                              style={{ maxHeight: 240 }}
-                            />
-                          )}
-                          {msg.type === 'file' && (
-                            <div className="d-flex align-items-center bg-light p-2 rounded-3">
-                              <FaFileAlt className="text-primary me-2" size={24} />
-                              <div>
-                                <div className="fw-medium">ملف مرفق</div>
-                                <a href={msg.content} target="_blank" rel="noopener noreferrer" className="small text-primary">
-                                  تحميل الملف
-                                </a>
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Time and Status */}
-                          <div className={`d-flex justify-content-end align-items-center small mt-1 ${msg.senderId === userId ? 'text-light' : 'text-muted'}`}>
-                            {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : 'الآن'}
-                            {msg.senderId === userId && (
-                              <span className="ms-1">✓</span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Reactions */}
-                        {msg.reactions && msg.reactions.length > 0 && (
-                          <div className={`d-flex mt-1 gap-1 ${msg.senderId === userId ? 'justify-content-start' : 'justify-content-end'}`}>
-                            {msg.reactions.map((reaction, idx) => (
-                              <span 
-                                key={idx} 
-                                className="bg-white small py-1 px-2 rounded-pill shadow-sm cursor-pointer"
-                              >
-                                {reaction.emoji} {reaction.users.length > 1 && reaction.users.length}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-            ) : (
-              <div className="d-flex h-100 align-items-center justify-content-center">
-                <div className="text-center p-4 bg-white rounded-4 shadow-sm">
-                  <h5 className="fw-bold mb-2">لا توجد رسائل بعد</h5>
-                  <p className="text-muted mb-3">ابدأ المحادثة مع أعضاء المجموعة!</p>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Input Area */}
-          <div className="p-3 border-top bg-white chat-input-area">
-            {/* Reply Preview */}
-            {replyToMsg && (
-              <div className="d-flex justify-content-between align-items-center bg-light p-2 rounded-3 mb-2">
-                <div className="d-flex align-items-center">
-                  <div className="border-start border-3 border-primary h-100 me-2"></div>
-                  <div>
-                    <div className="small fw-bold text-primary">{replyToMsg.senderName}</div>
-                    <div className="small text-truncate">{replyToMsg.content}</div>
-                  </div>
-                </div>
-                <button 
-                  className="btn btn-sm text-muted" 
-                  onClick={() => setReplyToMsg(null)}
-                >
-                  <FaTimes />
-                </button>
-              </div>
-            )}
-            
-            <form
-              onSubmit={(e) => {
-                console.log('📝 Form submitted', {
-                  isMobile: window.innerWidth <= 768,
-                  messageInput: messageInput.substring(0, 20),
-                  isConnected
-                });
-                handleSendMessage(e);
-              }}
-              className="d-flex align-items-end gap-2"
-            >
-              <div className="flex-grow-1 bg-light rounded-4 px-3 py-2">
-                {/* Attachment Buttons - Responsive */}
-                <div className="d-flex gap-1 gap-md-2 mb-2 flex-wrap">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
-                    onClick={() => {
-                      const element = document.getElementById('image-upload');
-                      if (element) element.click();
-                    }}
-                    title="إضافة صورة"
-                  >
-                    <FaImage size={14} />
-                  </button>
-                  <input
-                    id="image-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    style={{ display: 'none' }}
-                  />
-
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
-                    onClick={() => {
-                      const element = document.getElementById('video-upload');
-                      if (element) element.click();
-                    }}
-                    title="إضافة فيديو"
-                  >
-                    <FaVideo size={14} />
-                  </button>
-                  <input
-                    id="video-upload"
-                    type="file"
-                    accept="video/*"
-                    onChange={handleFileUpload}
-                    style={{ display: 'none' }}
-                  />
-
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
-                    onClick={() => {
-                      const element = document.getElementById('file-upload');
-                      if (element) element.click();
-                    }}
-                    title="إضافة ملف"
-                  >
-                    <FaFileAlt size={14} />
-                  </button>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                    onChange={handleFileUpload}
-                    style={{ display: 'none' }}
-                  />
-
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2 d-none d-md-inline-block"
-                    title="تسجيل صوتي"
-                  >
-                    <FaMicrophone size={14} />
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light rounded-circle p-1 p-md-2"
-                    onClick={() => setShowEmoji(!showEmoji)}
-                    title="إضافة إيموجي"
-                  >
-                    <FaRegSmile size={14} />
-                  </button>
-                </div>
-                
-                {/* Text Input */}
-                <textarea
-                  className="form-control border-0 bg-transparent p-0"
-                  placeholder="اكتب رسالتك..."
-                  value={messageInput}
-                  onChange={e => {
-                    setMessageInput(e.target.value);
-                    if (!isTyping) handleTyping(true);
-                    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                    typingTimeoutRef.current = setTimeout(() => handleTyping(false), 2000);
-                  }}
-                  onKeyDown={e => {
-                    console.log('⌨️ Key pressed:', e.key, {
-                      isMobile: window.innerWidth <= 768,
-                      keyCode: e.keyCode,
-                      which: e.which
-                    });
-
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      console.log('⌨️ Enter key pressed - sending message');
-                      handleSendMessage(e);
-                    }
-                  }}
-                  onKeyUp={e => {
-                    // Additional handler for mobile keyboards
-                    if ((e.key === 'Enter' || e.keyCode === 13) && !e.shiftKey && window.innerWidth <= 768) {
-                      console.log('📱 Mobile Enter detected');
-                      e.preventDefault();
-                      handleSendMessage(e);
-                    }
-                  }}
-                  rows={1}
-                  style={{ resize: 'none', minHeight: '40px', direction: 'rtl', textAlign: 'right' }}
-                  inputMode="text"
-                  enterKeyHint="send"
-                  name="message"
-                  dir="rtl"
-                />
-              </div>
-
-              {/* Send Button - Mobile Optimized */}
-              <button
-                type="button"
-                className="btn btn-primary d-flex align-items-center justify-content-center"
-                disabled={!isConnected || !messageInput.trim()}
-                title="إرسال الرسالة"
-                onClick={(e) => {
-                  console.log('📱 Send button clicked', {
-                    isMobile: window.innerWidth <= 768,
-                    disabled: !isConnected || !messageInput.trim(),
-                    messageLength: messageInput.length,
-                    isConnected
-                  });
-
-                  // Always prevent default and handle manually for better mobile support
-                  e.preventDefault();
-                  console.log('📱 Manual send triggered');
-                  handleSendMessage(e);
-                }}
-                style={{
-                  minWidth: window.innerWidth <= 768 ? '50px' : '44px',
-                  minHeight: window.innerWidth <= 768 ? '50px' : '44px',
-                  borderRadius: window.innerWidth <= 768 ? '12px' : '50%',
-                  touchAction: 'manipulation',
-                  WebkitTapHighlightColor: 'transparent'
-                }}
-              >
-                <FaPaperPlane size={window.innerWidth <= 768 ? 18 : 16} />
-              </button>
-            </form>
-            
-            {/* Emoji Picker - Temporarily disabled */}
-            {false && showEmoji && (
-              <div className="position-absolute bottom-100 end-0 mb-2 shadow-lg rounded-3 overflow-hidden" ref={emojiPickerRef}>
-                <div className="p-3 bg-white rounded-3 shadow">
-                  <div className="text-center">Emoji Picker</div>
-                </div>
-              </div>
-            )}
-            
-            {/* Typing Indicator */}
-            {typingUsers.size > 0 && (
-              <div className="small text-muted mt-1 px-2">
-                {Array.from(typingUsers).map(id => 
-                  members.find(m => m.id === id)?.name || 'شخص ما'
-                ).join(', ')} {typingUsers.size === 1 ? 'يكتب الآن...' : 'يكتبون الآن...'}
-              </div>
-            )}
-          </div>
+        <div className="break-words text-sm" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.content) }} />
+        <div className="flex justify-end mt-1">
+          <span className="text-xs text-gray-400">{msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) : 'الآن'}</span>
         </div>
       </div>
-      
-      {/* Image Preview Modal */}
-      {previewImage && (
-        <div 
-          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-dark bg-opacity-75"
-          style={{ zIndex: 1050 }}
-          onClick={() => setPreviewImage(null)}
-        >
-          <div className="position-relative" style={{ maxWidth: '90%', maxHeight: '90vh' }}>
-            <img 
-              src={previewImage} 
-              alt="معاينة الصورة" 
-              className="img-fluid rounded-3"
-              style={{ maxHeight: '90vh' }}
-            />
-            <button 
-              className="position-absolute top-0 end-0 btn btn-sm btn-light rounded-circle m-2"
-              onClick={() => setPreviewImage(null)}
-            >
-              <FaTimes />
-            </button>
+    </div>
+  );
+
+  // ProfileDrawer (fixed, simple version)
+  const ProfileDrawer = () => selectedUser && (
+    <div className="fixed inset-0 z-40 flex justify-end bg-black bg-opacity-40" onClick={() => setShowUserProfile(false)}>
+      <div className="w-80 bg-white dark:bg-gray-900 h-full shadow-xl p-6 flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold">
+            {selectedUser.avatar ? <img src={selectedUser.avatar} alt={selectedUser.name} className="w-24 h-24 rounded-full object-cover" /> : selectedUser.name.charAt(0).toUpperCase()}
+          </div>
+          <div className="font-bold text-xl text-gray-800 dark:text-white">{selectedUser.name}</div>
+          <div className="text-sm text-gray-500">{selectedUser.role === 'admin' ? 'مدير المجموعة' : 'عضو'}</div>
+          <div className="flex gap-2 mt-2">
+            <button className="bg-blue-500 text-white px-3 py-1 rounded-lg flex items-center gap-1"><FaEnvelope /> رسالة خاصة</button>
+            <button className="bg-red-500 text-white px-3 py-1 rounded-lg flex items-center gap-1"><FaBan /> حظر</button>
           </div>
         </div>
-      )}
+        <div className="mt-6">
+          <div className="text-xs text-gray-400">انضم منذ</div>
+          <div className="text-sm text-gray-700 dark:text-gray-200">{selectedUser.joinedAt ? new Date(selectedUser.joinedAt).toLocaleDateString('ar-EG') : ''}</div>
+        </div>
+      </div>
     </div>
-    </>
+  );
+
+  // Sidebar (fixed, simple version)
+  const Sidebar = () => (
+    <aside className="w-72 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+        <span className="font-bold text-lg text-gray-800 dark:text-white flex items-center gap-2"><FaUsers className="text-blue-500" /> أعضاء</span>
+        <button className="md:hidden text-gray-500" onClick={() => setShowSidebar(false)}><FaTimes /></button>
+      </div>
+      <div className="p-2">
+        <div className="relative mb-2">
+          <input type="text" className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="بحث..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+          <FaSearch className="absolute right-3 top-3 text-gray-400" />
+        </div>
+        <div className="overflow-y-auto h-[calc(100vh-120px)] pr-1">
+          {members.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase())).map(member => (
+            <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-800 cursor-pointer transition" onClick={() => { setSelectedUser(member); setShowUserProfile(true); }}>
+              <div className="relative">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
+                  {member.avatar ? <img src={member.avatar} alt={member.name} className="w-10 h-10 rounded-full object-cover" /> : member.name.charAt(0).toUpperCase()}
+                </div>
+                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${onlineUsers.has(member.id) ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+              </div>
+              <div className="flex-1">
+                <div className="font-medium text-gray-800 dark:text-white flex items-center gap-1">{member.name} {member.role === 'admin' && <FaCrown className="text-yellow-400" title="مدير" />}</div>
+                <div className="text-xs text-gray-500">{onlineUsers.has(member.id) ? 'متصل' : 'غير متصل'}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
+  );
+
+  // Main Chat Layout
+  return (
+    <div className="flex h-[100vh] bg-gray-50 dark:bg-gray-900">
+      {/* Sidebar */}
+      <div className={`fixed md:static z-30 ${showSidebar ? 'block' : 'hidden'} md:block`} style={{height:'100vh'}}>
+        <Sidebar />
+      </div>
+      {/* Overlay for mobile */}
+      {showSidebar && <div className="fixed inset-0 bg-black bg-opacity-40 z-20 md:hidden" onClick={() => setShowSidebar(false)}></div>}
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+          <div className="flex items-center gap-2">
+            <button className="md:hidden text-gray-500" onClick={() => setShowSidebar(true)}><FaUsers /></button>
+            <span className="font-bold text-lg text-gray-800 dark:text-white">{groupName}</span>
+            <span className="ml-2 px-2 py-1 rounded bg-blue-100 text-blue-700 text-xs">{onlineUsers.size} متصل</span>
+            <span className="ml-2 px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs">{members.length} عضو</span>
+          </div>
+        </div>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-6" style={{background: 'linear-gradient(to bottom, #f3f4f6, #e0e7ef)'}}>
+          {messages.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-gray-400">لا توجد رسائل بعد</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {messages.map((msg, idx) => (
+                <ChatBubble key={msg.id || idx} msg={msg} isOwn={msg.senderId === userId} />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </div>
+        {/* Input Area */}
+        <form className="flex items-center gap-2 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900" onSubmit={e => { e.preventDefault(); /* handleSendMessage() */ }}>
+          <button type="button" className="text-gray-500 hover:text-blue-600"><FaImage /></button>
+          <button type="button" className="text-gray-500 hover:text-blue-600"><FaVideo /></button>
+          <button type="button" className="text-gray-500 hover:text-blue-600"><FaFileAlt /></button>
+          <div className="relative flex-1">
+            <input type="text" className="w-full rounded-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="اكتب رسالة..." value={messageInput} onChange={e => setMessageInput(e.target.value)} />
+            <button type="button" className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-yellow-500" onClick={() => setShowEmoji(!showEmoji)}><FaRegSmile /></button>
+            {showEmoji && (
+              <div className="absolute bottom-12 left-0 z-40">
+                <EmojiPicker onEmojiClick={e => setMessageInput(prev => prev + e.emoji)} />
+              </div>
+            )}
+          </div>
+          <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-2 flex items-center gap-1"><FaPaperPlane /> إرسال</button>
+        </form>
+      </div>
+      {/* User Profile Drawer */}
+      {showUserProfile && <ProfileDrawer />}
+    </div>
   );
 };
 
